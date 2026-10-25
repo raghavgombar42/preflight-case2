@@ -98,6 +98,11 @@ export function applyChatEdits(input: Booking, edits: ChatEdit[]): ApplyOutcome 
   const applied: string[] = [];
   const rejected: string[] = [];
   const clarifications: string[] = [];
+  let lastAdded: string | null = null;
+  // The model can't know the id of an item it adds in the same message, so
+  // an unknown id falls back to the item just added (or the only item).
+  const resolveItem = (id?: string | null) =>
+    b.items.find((x) => x.id === id) ?? b.items.find((x) => x.id === lastAdded) ?? (b.items.length === 1 ? b.items[0] : undefined);
   const tryPatch = (p: Patch, desc: string) => {
     const r = applyPatch(b, p, "chat");
     if (r.ok) {
@@ -139,10 +144,11 @@ export function applyChatEdits(input: Booking, edits: ChatEdit[]): ApplyOutcome 
         for (const k of ITEM_FIELDS) if (e.item && e.item[k] !== undefined) values[k] = e.item[k];
         if (!values.sku) values.sku = `ITEM-${b.nextItemSeq}`;
         tryPatch({ kind: "addItem", values }, `added ${values.description ?? values.sku}`);
+        lastAdded = b.items[b.items.length - 1]?.id ?? null;
         break;
       }
       case "update_item": {
-        const it = b.items.find((x) => x.id === e.itemId);
+        const it = resolveItem(e.itemId);
         const f = e.field as ItemField;
         if (!it) {
           rejected.push("I couldn't tell which product you meant.");
@@ -159,7 +165,8 @@ export function applyChatEdits(input: Booking, edits: ChatEdit[]): ApplyOutcome 
       }
       case "mark_unknown": {
         if (!e.field) break;
-        const nb = markUnknown(b, e.field, e.itemId);
+        const isItemField = (ITEM_FIELDS as readonly string[]).includes(e.field);
+        const nb = markUnknown(b, e.field, isItemField ? resolveItem(e.itemId)?.id : null);
         if (nb) {
           b = nb;
           applied.push(`${FIELD_WORDS[e.field] ?? e.field} marked as unknown`);
@@ -173,7 +180,7 @@ export function applyChatEdits(input: Booking, edits: ChatEdit[]): ApplyOutcome 
         break;
       }
       case "confirm_no_battery": {
-        const it = b.items.find((x) => x.id === e.itemId);
+        const it = resolveItem(e.itemId);
         if (it) tryPatch({ kind: "r06Clear", itemId: it.id }, `${itemLabel(it)}: no battery confirmed`);
         break;
       }
@@ -232,8 +239,14 @@ export function nextAsk(b: Booking): { keys: string[]; text: string } | null {
   const batch = qs.filter((x) => x.group === group).slice(0, 3);
   const texts = batch.map((x) => x.text);
   const joined = texts.length === 1 ? texts[0] : `${texts.slice(0, -1).join("; ")}; and ${texts[texts.length - 1]}`;
-  const lead = group.startsWith("item:") ? "I still need, " : "Could you tell me ";
-  return { keys: batch.map((x) => x.key), text: `${lead}${joined}?` };
+  if (group.startsWith("item:")) {
+    const body = joined.replace(/^for /, "");
+    const cut = body.indexOf(": ");
+    const name = body.slice(0, cut);
+    const list = body.slice(cut + 2);
+    return { keys: batch.map((x) => x.key), text: `For the ${name}, I still need the ${list}.` };
+  }
+  return { keys: batch.map((x) => x.key), text: `Could you tell me ${joined}?` };
 }
 
 // ---------- deterministic fallback parser ----------

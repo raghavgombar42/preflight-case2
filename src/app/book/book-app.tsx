@@ -2,7 +2,8 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Bot, Loader2, RotateCcw, Send, User, WifiOff } from "lucide-react";
-import { analyze } from "@/core/analyze";
+import { analyze, describeKey } from "@/core/analyze";
+import { fieldOf } from "@/ui/field-editor";
 import { ApplyOutcome, ChatEdit, applyChatEdits, compactBookingForModel, nextAsk, parseLocally } from "@/core/chat";
 import { emptyChatBooking } from "@/core/edit";
 import { Booking } from "@/core/model";
@@ -98,17 +99,33 @@ export function BookApp() {
     const after = analyze(out.booking, today);
 
     const lines: string[] = [];
-    if (reply) lines.push(reply);
-    if (out.rejected.length) lines.push(out.rejected.join(" "));
+    // If anything was rejected the model's reply may claim it happened, so
+    // describe the outcome from what was actually applied instead.
+    if (out.rejected.length) {
+      if (out.applied.length) lines.push(`Updated: ${out.applied.join("; ")}.`);
+      lines.push(out.rejected.join(" "));
+    } else if (reply) lines.push(reply);
     if (out.clarifications.length) lines.push(out.clarifications.join(" "));
     const entry = ws.log[0] && ws !== before.ws ? ws.log[0] : null;
     let meta: string | undefined;
     if (entry) {
+      const beforeA = analyze(before.ws.current, today);
+      // A rule finding that only says "not provided yet" isn't news while we're still collecting.
+      const notYetGiven = (key: string, a: typeof after) => {
+        const fd = a.findings.find((x) => x.key === key);
+        return !!fd && fd.fields.length > 0 && fd.fields.every((r) => {
+          const fv = fieldOf(a.booking, r);
+          return !fv || fv.status === "missing" || fv.status === "unknown";
+        });
+      };
+      const fixed = entry.resolvedKeys.filter((k) => !k.startsWith("DATA:") && !notYetGiven(k, beforeA));
+      const raised = entry.introducedKeys.filter((k) => !k.startsWith("DATA:") && !notYetGiven(k, after));
       const bits: string[] = [];
+      const changes = entry.changes.filter((c) => c.before !== "(blank)");
+      if (changes.length) bits.push(`Changed: ${changes.slice(0, 3).map((c) => `${c.label} ${c.before} → ${c.after}`).join("; ")}`);
       if (entry.carrierBefore !== entry.carrierAfter && entry.carrierAfter) bits.push(`Carrier now ${entry.carrierAfter}${entry.carrierBefore ? ` (was ${entry.carrierBefore})` : ""}`);
-      if (entry.resolved.length) bits.push(`Resolved: ${entry.resolved.join("; ")}`);
-      const newIssues = entry.introduced.filter((x) => !x.endsWith("now missing"));
-      if (newIssues.length) bits.push(`New issue: ${newIssues.join("; ")}`);
+      if (fixed.length) bits.push(`Resolved: ${fixed.map((k) => describeKey(k, beforeA.findings)).join("; ")}`);
+      if (raised.length) bits.push(`New issue: ${raised.map((k) => describeKey(k, after.findings)).join("; ")}`);
       meta = bits.join(" · ") || undefined;
     }
     if (!out.clarifications.length) {

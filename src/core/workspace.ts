@@ -17,6 +17,8 @@ export type LogEntry = {
   carrierAfter: string | null;
   resolved: string[];
   introduced: string[];
+  resolvedKeys: string[];
+  introducedKeys: string[];
 };
 
 export type Workspace = {
@@ -49,6 +51,8 @@ export function commit(ws: Workspace, next: Booking, label: string, source: LogE
     verdictAfter: after.verdict,
     carrierBefore: carrierName(before),
     carrierAfter: carrierName(after),
+    resolvedKeys: [...bk].filter((k) => !ak.has(k)),
+    introducedKeys: [...ak].filter((k) => !bk.has(k)),
     resolved: summarise([...bk].filter((k) => !ak.has(k)), before, "filled"),
     introduced: summarise([...ak].filter((k) => !bk.has(k)), after, "now missing"),
   };

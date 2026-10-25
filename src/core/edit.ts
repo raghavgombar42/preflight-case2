@@ -5,11 +5,13 @@
 import { ORIGIN_COUNTRY, CURRENCY, cityCountry } from "./config";
 import {
   BOOKING_FIELDS,
+  BOOKING_FIELD_LABELS,
   Booking,
   BookingField,
   FieldSource,
   FieldValue,
   ITEM_FIELDS,
+  ITEM_FIELD_LABELS,
   Item,
   ItemField,
   Patch,
@@ -170,7 +172,7 @@ export function diffBookings(a: Booking, b: Booking): FieldChange[] {
   for (const f of BOOKING_FIELDS) {
     const x = show(a[f] as FieldValue<unknown>);
     const y = show(b[f] as FieldValue<unknown>);
-    if (x !== y) out.push({ label: f, before: x, after: y });
+    if (x !== y) out.push({ label: BOOKING_FIELD_LABELS[f], before: x, after: y });
   }
   const ids = new Set([...a.items.map((i) => i.id), ...b.items.map((i) => i.id)]);
   for (const id of ids) {
@@ -188,7 +190,7 @@ export function diffBookings(a: Booking, b: Booking): FieldChange[] {
     for (const f of ITEM_FIELDS) {
       const x = show(ia[f] as FieldValue<unknown>);
       const y = show(ib[f] as FieldValue<unknown>);
-      if (x !== y) out.push({ label: `${name} · ${f}`, before: x, after: y });
+      if (x !== y) out.push({ label: `${name} · ${ITEM_FIELD_LABELS[f].toLowerCase()}`, before: x, after: y });
     }
   }
   if (a.chosenCarrier !== b.chosenCarrier) out.push({ label: "chosen carrier", before: a.chosenCarrier ?? "none", after: b.chosenCarrier ?? "none" });
