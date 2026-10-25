@@ -105,9 +105,37 @@ function limited(ip: string) {
   return h.n > 40;
 }
 
+// OpenRouter (OpenAI-compatible) route to Gemini, used when only an
+// OPENROUTER_API_KEY is configured.
+async function viaOpenRouter(key: string, model: string, sys: string, prompt: string) {
+  const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+    method: "POST",
+    headers: { authorization: `Bearer ${key}`, "content-type": "application/json", "x-title": "Pre-Flight" },
+    body: JSON.stringify({
+      model,
+      temperature: 0,
+      response_format: { type: "json_object" },
+      messages: [
+        {
+          role: "system",
+          content: `${sys}\n\nRespond with a single JSON object: {"edits": [ {op, field?, value?, delta?, itemId?, item?, carrier?, question?} ], "reply": string}. No markdown.`,
+        },
+        { role: "user", content: prompt },
+      ],
+    }),
+    signal: AbortSignal.timeout(25_000),
+  });
+  if (!res.ok) throw new Error(`OpenRouter ${res.status}: ${(await res.text()).slice(0, 200)}`);
+  const j = await res.json();
+  const text: string = j?.choices?.[0]?.message?.content ?? "";
+  const json = text.slice(text.indexOf("{"), text.lastIndexOf("}") + 1);
+  return responseSchema.parse(JSON.parse(json));
+}
+
 export async function POST(req: NextRequest) {
   const apiKey = process.env.GOOGLE_GENERATIVE_AI_API_KEY || process.env.GEMINI_API_KEY;
-  if (!apiKey) return NextResponse.json({ ok: false, reason: "no-key" });
+  const orKey = process.env.OPENROUTER_API_KEY;
+  if (!apiKey && !orKey) return NextResponse.json({ ok: false, reason: "no-key" });
 
   const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "local";
   if (limited(ip)) return NextResponse.json({ ok: false, reason: "rate-limited" });
@@ -122,8 +150,6 @@ export async function POST(req: NextRequest) {
   }
 
   const today = istToday();
-  const google = createGoogleGenerativeAI({ apiKey });
-  const models = (process.env.GEMINI_MODEL ? [process.env.GEMINI_MODEL] : []).concat(["gemini-3.8-flash", "gemini-3-flash", "gemini-2.5-flash"]);
   const prompt = `Current booking (values null = not provided yet; "UNKNOWN" = seller said they don't know):
 ${JSON.stringify(body.booking).slice(0, 20000)}
 
@@ -133,20 +159,35 @@ Valid destination cities: ${ALL_DEST_CITIES.join(", ")}.
 Seller message:
 """${body.message}"""`;
 
-  for (const model of [...new Set(models)]) {
-    try {
-      const { object } = await generateObject({
-        model: google(model),
-        schema: responseSchema,
-        system: system(today),
-        prompt,
-        temperature: 0,
-        maxRetries: 1,
-        abortSignal: AbortSignal.timeout(20_000),
-      });
-      return NextResponse.json({ ok: true, model, edits: object.edits, reply: object.reply });
-    } catch (e) {
-      console.error(`chat model ${model} failed:`, (e as Error).message);
+  if (apiKey) {
+    const google = createGoogleGenerativeAI({ apiKey });
+    const models = (process.env.GEMINI_MODEL ? [process.env.GEMINI_MODEL] : []).concat(["gemini-3.8-flash", "gemini-3-flash", "gemini-2.5-flash"]);
+    for (const model of [...new Set(models)]) {
+      try {
+        const { object } = await generateObject({
+          model: google(model),
+          schema: responseSchema,
+          system: system(today),
+          prompt,
+          temperature: 0,
+          maxRetries: 1,
+          abortSignal: AbortSignal.timeout(20_000),
+        });
+        return NextResponse.json({ ok: true, model, edits: object.edits, reply: object.reply });
+      } catch (e) {
+        console.error(`chat model ${model} failed:`, (e as Error).message);
+      }
+    }
+  }
+  if (orKey) {
+    const models = (process.env.OPENROUTER_MODEL ? [process.env.OPENROUTER_MODEL] : []).concat(["google/gemini-2.5-flash", "google/gemini-2.0-flash-001"]);
+    for (const model of [...new Set(models)]) {
+      try {
+        const object = await viaOpenRouter(orKey, model, system(today), prompt);
+        return NextResponse.json({ ok: true, model, edits: object.edits, reply: object.reply });
+      } catch (e) {
+        console.error(`openrouter ${model} failed:`, (e as Error).message);
+      }
     }
   }
   return NextResponse.json({ ok: false, reason: "model-error" });
