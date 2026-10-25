@@ -42,6 +42,29 @@ export function CheckApp() {
     const onHash = () => setSelected(decodeURIComponent(window.location.hash.slice(1)) || null);
     window.addEventListener("hashchange", onHash);
     const t = setInterval(() => setToday(istToday()), 60_000);
+    // Demo links: /check?demo=sample loads the sample workbook; &open=BK-003 opens that booking.
+    const q = new URLSearchParams(window.location.search);
+    if (q.get("demo") === "sample") {
+      fetch("/sample-bookings.xlsx")
+        .then((r) => r.arrayBuffer())
+        .then((buf) => {
+          const r = parseWorkbook(buf);
+          const workspaces = r.bookings.map(newWorkspace);
+          setSession({
+            fileName: "sample-bookings.xlsx (sample with planted errors)",
+            uploadedAt: new Date().toISOString(),
+            workspaces,
+            unmatchedItems: r.unmatchedItems,
+            fileNotes: r.fileNotes,
+            duplicateRefs: r.duplicateRefs,
+          });
+          const ref = q.get("open");
+          const hit = ref ? workspaces.find((w) => w.current.ref.value === ref) : undefined;
+          setSelected(hit ? hit.current.uid : null);
+          history.replaceState(null, "", window.location.pathname + (hit ? `#${hit.current.uid}` : ""));
+        })
+        .catch(() => setError("Could not load the sample workbook."));
+    }
     return () => {
       window.removeEventListener("hashchange", onHash);
       clearInterval(t);
