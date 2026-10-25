@@ -1,54 +1,43 @@
-# Shipment Pre-Flight Checker
+# Pre-Flight · UK → EU shipment booking & error checker
 
-Case 2 — Mesa AI × Ops Hackathon, October 2026.
+Case 2, Mesa AI × Ops Hackathon (October 2026). Live: https://preflight-case2-sepia.vercel.app
 
-A booking assistant for UK → EU freight (Germany, France, Netherlands) that prevents errors while a seller books, catches the rest before collection, explains how to fix each one, and recommends the carrier that matches the seller's priority.
+Book a pallet shipment by chat or by uploading the official Bookings + Items workbook. Every booking is checked against the 10-rule rulebook, each problem shows its evidence, where the shipment would fail and a fix labelled by confidence, and the carrier is chosen to fit the seller's priority.
 
-## What it does
+## Pages
 
-- **Upload** the official Bookings + Items `.xlsx`
-- **Parses** headers by name (robust to row offsets, blank rows, template example rows, strict DD-MM-YYYY dates, numeric HS codes)
-- **Runs 10 rules** (R-01..R-10) as pure deterministic TypeScript functions — one per rule, each returning typed findings with evidence, a fix, and a confidence label
-- **Recommends** a carrier per seller priority (Cheapest, Fastest, Most reliable, Balanced). Balanced uses **minimax regret** with total-regret tiebreak
-- **Shows the verdict**: Blocked / Incomplete / Passed with warnings / Passed. Final state is "Ready for booking" — this app never says "Shipment booked"
+- `/book`: conversational booking. The model (Gemini via OpenRouter or Google) only proposes structured edits; code validates and applies them, decides what is still missing and re-runs every check after each message. Falls back to a deterministic parser and an editable form if the model is unavailable.
+- `/check`: upload → review queue (Blocked → Incomplete → Warnings → Ready) → booking detail with one-click fixes, undo, change log and print view. Files are parsed in the browser; nothing is stored on a server.
+- `/how-it-works`: rules, rate card, decisions and assumptions.
 
-## Stack
-
-- Next.js 16 (App Router) + TypeScript, deployed on Vercel Fluid Compute
-- `exceljs` for parsing
-- Vitest for unit tests (41 passing)
-- Tailwind for the ops UI
-
-## Project layout
+## Code
 
 ```
-src/
-├─ config/              rate card, allowed values, R-06 phrases
-├─ lib/
-│   ├─ parsing/         excel parser, strict DD-MM-YYYY, numbers
-│   ├─ booking/         FieldValue wrapper, Booking/Item types
-│   ├─ rules/           r01…r10, engine
-│   ├─ carrier/         eligibility, 4-priority ranking, minimax regret
-│   ├─ verdict.ts       4-state decider + next-steps text
-│   └─ analyze.ts       orchestrator used by API
-├─ app/
-│   ├─ api/upload/      POST xlsx → analyzed bookings
-│   ├─ queue/           review-queue placeholder
-│   └─ page.tsx         upload + queue + booking detail
-├─ components/          BookingDetail, QueueTable, verdict badge
-└─ tests/               rules + carrier unit tests
+src/core/      pure, tested business logic (no React)
+  config.ts      allowed values, rate card, rulebook, R-06 phrase lists
+  model.ts       booking model: raw value, clean value, status and source per field
+  values.ts      normalisers (strict DD-MM-YYYY, HS codes, numbers), IST date
+  workbook.ts    reads the template by sheet and header name, keeps row numbers
+  edit.ts        immutable patches, calculated totals for chat, diffs
+  carrier.ts     eligibility by weight, priority ranking, minimax regret, repack scenarios
+  rules.ts       R-01 … R-10 + data completeness
+  analyze.ts     verdict, fix advisor (simulates each fix), advisories, timeline
+  chat.ts        chat edit validation, next question, offline parser
+  workspace.ts   original + working copy, undo, change log
+src/ui/        shared React components (booking view, field editor)
+src/app/       pages and /api/chat
+tests/         vitest suites (rules, boundaries, multi-rule fixes, parser, chat)
+scripts/make-sample.mjs   builds public/sample-bookings.xlsx from the template
 ```
 
-## Running locally
+## Run
 
 ```sh
 npm install
+npm test          # vitest
 npm run dev
-npx vitest run
 ```
 
-## Status (Checkpoint 1)
+Environment (Vercel): `OPENROUTER_API_KEY` + `OPENROUTER_MODEL`, or `GEMINI_API_KEY` (+ optional `GEMINI_MODEL`). Without a key the chat runs in offline mode.
 
-- Upload → parse → rules → carrier → verdict → booking detail → review queue: ✅
-- Automated rule + carrier tests (14.1, 14.2): ✅ 41/41 passing
-- Chat booking + fix advisor + change log: planned Checkpoint 2
+See `DECISIONS.md` for every assumption.
