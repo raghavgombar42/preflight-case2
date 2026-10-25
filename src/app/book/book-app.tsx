@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Bot, Loader2, RotateCcw, Send, User, WifiOff } from "lucide-react";
 import { analyze, describeKey } from "@/core/analyze";
 import { fieldOf } from "@/ui/field-editor";
-import { ApplyOutcome, ChatEdit, applyChatEdits, compactBookingForModel, nextAsk, parseLocally } from "@/core/chat";
+import { ApplyOutcome, ChatEdit, applyChatEdits, compactBookingForModel, missingQuestions, nextAsk, parseLocally } from "@/core/chat";
 import { emptyChatBooking } from "@/core/edit";
 import { Booking } from "@/core/model";
 import { istToday, formatDate } from "@/core/values";
@@ -61,6 +61,7 @@ export function BookApp() {
 
   const b = st.ws.current;
   const started = st.msgs.some((m) => m.role === "user");
+  const pending = started ? missingQuestions(b).length : 0;
 
   const send = async (text: string) => {
     const message = text.trim();
@@ -121,7 +122,7 @@ export function BookApp() {
       const fixed = entry.resolvedKeys.filter((k) => !k.startsWith("DATA:") && !notYetGiven(k, beforeA));
       const raised = entry.introducedKeys.filter((k) => !k.startsWith("DATA:") && !notYetGiven(k, after));
       const bits: string[] = [];
-      const changes = entry.changes.filter((c) => c.before !== "(blank)");
+      const changes = entry.changes.filter((c) => c.before !== "(blank)" && c.before !== "(none)");
       if (changes.length) bits.push(`Changed: ${changes.slice(0, 3).map((c) => `${c.label} ${c.before} → ${c.after}`).join("; ")}`);
       if (entry.carrierBefore !== entry.carrierAfter && entry.carrierAfter) bits.push(`Carrier now ${entry.carrierAfter}${entry.carrierBefore ? ` (was ${entry.carrierBefore})` : ""}`);
       if (fixed.length) bits.push(`Resolved: ${fixed.map((k) => describeKey(k, beforeA.findings)).join("; ")}`);
@@ -163,7 +164,13 @@ export function BookApp() {
           <p className="text-sm text-ink-3">Describe the shipment in plain language. Checks re-run after every message. Today: {formatDate(today)} (IST)</p>
         </div>
         <div className="flex items-center gap-2">
-          <VerdictChip verdict={analysis.verdict} />
+          {pending ? (
+            <span className="inline-flex items-center rounded-full bg-brand-soft px-2 py-0.5 text-xs font-medium text-brand ring-1 ring-inset ring-brand/20">
+              Collecting details · {pending} question{pending > 1 ? "s" : ""} left
+            </span>
+          ) : (
+            <VerdictChip verdict={analysis.verdict} />
+          )}
           <Button
             size="sm"
             onClick={() => {
