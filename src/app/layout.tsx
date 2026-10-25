@@ -1,30 +1,35 @@
 import type { Metadata } from "next";
+import { Inter } from "next/font/google";
+import Link from "next/link";
+import { NavLinks } from "@/ui/nav";
 import "./globals.css";
 
+const inter = Inter({ subsets: ["latin"], variable: "--font-inter", display: "swap" });
+
 export const metadata: Metadata = {
-  title: "Shipment Pre-Flight Checker",
-  description: "Catch errors before your UK → EU shipment leaves. Case 2, Mesa AI x Ops Hackathon.",
+  title: "Pre-Flight · UK → EU freight checks",
+  description:
+    "Book a UK → EU pallet shipment by chat or spreadsheet, catch paperwork errors before collection, and get the carrier that fits your priority.",
 };
 
-export default function RootLayout({ children }: LayoutProps<"/">) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
-      <body className="min-h-screen bg-slate-50 text-slate-900 antialiased">
-        <header className="border-b bg-white">
-          <div className="mx-auto max-w-6xl px-4 py-3 flex items-center justify-between">
-            <a href="/" className="font-semibold tracking-tight text-slate-900">
-              Pre-Flight · UK → EU Freight
-            </a>
-            <nav className="flex gap-4 text-sm text-slate-600">
-              <a href="/" className="hover:text-slate-900">Upload</a>
-              <a href="/chat" className="hover:text-slate-900">New booking (chat)</a>
-              <a href="/queue" className="hover:text-slate-900">Review queue</a>
-            </nav>
+    <html lang="en" className={inter.variable}>
+      <body className="min-h-screen font-sans antialiased">
+        <header className="sticky top-0 z-30 border-b border-line bg-white/90 backdrop-blur">
+          <div className="mx-auto flex max-w-7xl items-center gap-6 px-4 py-3">
+            <Link href="/" className="flex items-center gap-2 font-semibold tracking-tight text-ink">
+              <span className="grid h-7 w-7 place-items-center rounded-md bg-brand text-[13px] font-bold text-white">PF</span>
+              <span>Pre-Flight</span>
+              <span className="hidden text-sm font-normal text-ink-3 sm:inline">UK → EU freight</span>
+            </Link>
+            <NavLinks />
           </div>
         </header>
-        <main className="mx-auto max-w-6xl px-4 py-6">{children}</main>
-        <footer className="mx-auto max-w-6xl px-4 py-10 text-xs text-slate-500">
-          Built for Mesa AI × Ops Hackathon · deterministic rule engine · code decides, not the model.
+        <main className="mx-auto max-w-7xl px-4 py-6">{children}</main>
+        <footer className="mx-auto max-w-7xl px-4 pb-10 pt-4 text-xs text-ink-3">
+          Checks are deterministic: every rule, total and carrier ranking is computed by code from the official rate card and
+          rulebook. AI is used only to understand chat messages.
         </footer>
       </body>
     </html>

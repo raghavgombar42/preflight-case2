@@ -1,113 +1,79 @@
-"use client";
-import { useState } from "react";
-import type { AnalyzedBooking } from "@/lib/analyze";
-import BookingDetail from "@/components/BookingDetail";
-import QueueTable from "@/components/QueueTable";
-
-type UploadResponse = {
-  bookings: AnalyzedBooking[];
-  unmatchedItems: Array<{ sourceRow: number; bookingRef: string; raw: Record<string, unknown> }>;
-  duplicateBookingRefs: string[];
-  fileErrors: string[];
-};
+import Link from "next/link";
+import { ArrowRight, FileSpreadsheet, MessageSquareText, ShieldCheck, Truck, Wrench } from "lucide-react";
+import { RULES } from "@/core/config";
 
 export default function Home() {
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [result, setResult] = useState<UploadResponse | null>(null);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-
-  async function onFile(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setLoading(true);
-    setError(null);
-    setResult(null);
-    setSelectedId(null);
-    const fd = new FormData();
-    fd.append("file", file);
-    try {
-      const res = await fetch("/api/upload", { method: "POST", body: fd });
-      const json = (await res.json()) as UploadResponse & { error?: string };
-      if (!res.ok) throw new Error(json.error ?? "Upload failed");
-      setResult(json);
-      if (json.bookings.length > 0) setSelectedId(json.bookings[0].booking.id);
-    } catch (err) {
-      setError((err as Error).message);
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  const selected = result?.bookings.find((b) => b.booking.id === selectedId) ?? null;
-
   return (
-    <div className="space-y-6">
-      {!result && (
-        <section className="rounded-lg border bg-white p-6">
-          <h1 className="text-xl font-semibold mb-2">Pre-flight checks for UK → EU freight</h1>
-          <p className="text-sm text-slate-600 mb-5 max-w-prose">
-            Upload the official Bookings + Items workbook. We parse it, run the 10-rule checker,
-            compare the three route carriers against the seller priority, and show what to fix.
+    <div className="space-y-10">
+      <section className="rounded-2xl border border-line bg-white px-6 py-10 sm:px-10">
+        <div className="max-w-3xl">
+          <div className="mb-3 inline-flex items-center gap-2 rounded-full bg-brand-soft px-3 py-1 text-xs font-medium text-brand">
+            <ShieldCheck className="h-3.5 w-3.5" /> Pre-flight checks for UK → Germany, France & Netherlands
+          </div>
+          <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">Catch paperwork mistakes before the shipment leaves, not at customs.</h1>
+          <p className="mt-3 text-lg text-ink-2">
+            Book a pallet shipment by chatting or by uploading a spreadsheet. Every booking is checked against the 10-rule rulebook, each problem
+            comes with its evidence and a fix, and the carrier is chosen to match what matters most to the seller.
           </p>
-          <label className="inline-flex items-center gap-3 rounded-md border bg-slate-50 px-4 py-3 cursor-pointer hover:bg-slate-100">
-            <span className="text-sm font-medium">Choose .xlsx</span>
-            <input type="file" accept=".xlsx" onChange={onFile} className="hidden" />
-          </label>
-          {loading && <p className="mt-3 text-sm text-slate-600">Parsing and running checks…</p>}
-          {error && <p className="mt-3 text-sm text-rose-700">{error}</p>}
-          <div className="mt-6 text-xs text-slate-500 border-t pt-4">
-            <p className="font-medium text-slate-700 mb-1">What it checks</p>
-            <ul className="grid grid-cols-2 gap-x-6 gap-y-1 max-w-xl">
-              <li>R-01 HS code ≥ 6 digits</li>
-              <li>R-02 Σ qty × price = declared</li>
-              <li>R-03 upc × cartons = qty</li>
-              <li>R-04 booking cartons = Σ item cartons</li>
-              <li>R-05 weight/pallet ≤ carrier max</li>
-              <li>R-06 no lithium / aerosols / flammables</li>
-              <li>R-07 gross ≥ Σ unit weight × qty</li>
-              <li>R-08 warehouse → appointment</li>
-              <li>R-09 country of origin</li>
-              <li>R-10 ready date not in past</li>
-            </ul>
+          <div className="mt-6 flex flex-wrap gap-3">
+            <Link href="/book" className="inline-flex items-center gap-2 rounded-lg bg-brand px-4 py-2.5 text-sm font-medium text-white shadow-sm hover:bg-blue-800">
+              <MessageSquareText className="h-4 w-4" /> Start a booking by chat
+            </Link>
+            <Link href="/check" className="inline-flex items-center gap-2 rounded-lg bg-white px-4 py-2.5 text-sm font-medium text-ink ring-1 ring-inset ring-grey-line hover:bg-grey-soft">
+              <FileSpreadsheet className="h-4 w-4" /> Upload bookings (.xlsx)
+            </Link>
           </div>
-        </section>
-      )}
+        </div>
+      </section>
 
-      {result && (
-        <>
-          {result.fileErrors.length > 0 && (
-            <div className="rounded-lg border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800">
-              <p className="font-medium">File issues</p>
-              <ul className="list-disc list-inside">
-                {result.fileErrors.map((e, i) => <li key={i}>{e}</li>)}
-              </ul>
-            </div>
-          )}
-          {result.duplicateBookingRefs.length > 0 && (
-            <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
-              <p className="font-medium">Duplicate Booking IDs</p>
-              <p>{result.duplicateBookingRefs.join(", ")}. Each row is kept separately.</p>
-            </div>
-          )}
-          {result.unmatchedItems.length > 0 && (
-            <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
-              <p className="font-medium">Unmatched items</p>
-              <p>{result.unmatchedItems.length} item row(s) reference a Booking ID that is not in the Bookings sheet.</p>
-            </div>
-          )}
-          <QueueTable bookings={result.bookings} selectedId={selectedId} onSelect={setSelectedId} />
-          {selected && <BookingDetail analyzed={selected} />}
-          <div>
-            <button
-              className="text-sm text-slate-500 underline"
-              onClick={() => { setResult(null); setSelectedId(null); }}
-            >
-              Upload another file
-            </button>
+      <section className="grid gap-4 md:grid-cols-3">
+        {[
+          {
+            icon: <ShieldCheck className="h-5 w-5" />,
+            title: "Prevent, then detect",
+            body: "In chat, totals are calculated from the items so they can't drift. Uploaded sheets are checked line by line, with the exact row for every problem.",
+          },
+          {
+            icon: <Wrench className="h-5 w-5" />,
+            title: "Fixes, not just flags",
+            body: "Each issue shows the numbers behind it, where the shipment would fail, and a fix labelled by how certain it is. One click previews what it clears.",
+          },
+          {
+            icon: <Truck className="h-5 w-5" />,
+            title: "The right carrier, explained",
+            body: "Only services that can legally carry the pallet weight are ranked. Cheapest, fastest, most reliable or balanced, with the trade-offs in pounds and days.",
+          },
+        ].map((c) => (
+          <div key={c.title} className="rounded-xl border border-line bg-white p-5">
+            <div className="mb-3 grid h-9 w-9 place-items-center rounded-lg bg-brand-soft text-brand">{c.icon}</div>
+            <div className="font-semibold">{c.title}</div>
+            <p className="mt-1 text-sm text-ink-2">{c.body}</p>
           </div>
-        </>
-      )}
+        ))}
+      </section>
+
+      <section className="rounded-xl border border-line bg-white">
+        <div className="flex items-center justify-between border-b border-line px-5 py-3">
+          <h2 className="text-sm font-semibold">The 10 checks every booking goes through</h2>
+          <Link href="/how-it-works" className="inline-flex items-center gap-1 text-sm font-medium text-brand">
+            How decisions are made <ArrowRight className="h-4 w-4" />
+          </Link>
+        </div>
+        <ul className="grid divide-y divide-line sm:grid-cols-2 sm:divide-y-0">
+          {RULES.map((r) => (
+            <li key={r.id} className="flex items-start gap-3 border-line px-5 py-3 text-sm sm:border-b">
+              <span className="mt-0.5 rounded bg-ink px-1.5 py-0.5 font-mono text-[11px] font-semibold text-white">{r.id}</span>
+              <div>
+                <div className="text-ink">{r.rule}</div>
+                <div className="text-xs text-ink-3">
+                  <span className={r.severity === "red" ? "text-red" : "text-amber"}>{r.severity === "red" ? "Red: blocks" : "Amber: warning"}</span> · fails at{" "}
+                  {r.stage.toLowerCase()}
+                </div>
+              </div>
+            </li>
+          ))}
+        </ul>
+      </section>
     </div>
   );
 }
