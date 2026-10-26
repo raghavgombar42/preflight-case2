@@ -69,3 +69,26 @@ details > summary {
 details > summary::-webkit-details-marker {
   display: none;
 }
+
+/* Motion only to communicate state; disabled for reduced-motion users. */
+@keyframes reveal {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.reveal {
+  animation: reveal 200ms ease-out both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .reveal {
+    animation: none;
+  }
+  * {
+    transition-duration: 0s !important;
+  }
+}

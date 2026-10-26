@@ -166,14 +166,23 @@ function summaryAndTimeline(b: Booking, carrier: CarrierDecision, verdict: Verdi
   const sel = carrier.selected;
   const ready = b.readyDate.value;
   const eta = sel && ready ? addDays(ready, sel.option.transitDays) : null;
-  const route = `${b.originCity.value ?? "?"} → ${b.destCity.value ?? "?"}${b.destCountry.value ? `, ${b.destCountry.value}` : ""}`;
+  // Only known facts go into the sentence; unknowns are left out, never shown as "?".
+  const o = b.originCity.value;
+  const dc = b.destCity.value;
+  const route = o && dc ? ` from ${o} to ${dc}${b.destCountry.value ? `, ${b.destCountry.value}` : ""}` : o ? ` from ${o}` : dc ? ` to ${dc}` : "";
   const goods = b.items.length
-    ? b.items.map((it) => `${num(it.quantity.value)} × ${it.description.value ?? itemLabel(it)}`).join("; ")
-    : "no items yet";
+    ? b.items.map((it) => (it.quantity.value !== null ? `${num(it.quantity.value)} × ` : "") + (it.description.value ?? itemLabel(it))).join("; ")
+    : "goods";
+  const load = [
+    b.pallets.value !== null ? `${num(b.pallets.value)} pallet${b.pallets.value === 1 ? "" : "s"}` : null,
+    b.cartons.value !== null ? `${num(b.cartons.value)} cartons` : null,
+    b.grossWeight.value !== null ? kg(b.grossWeight.value) : null,
+    b.declaredValue.value !== null ? `declared ${gbp(b.declaredValue.value)}` : null,
+  ].filter(Boolean);
   const parts = [
-    `${b.sellerName.value ?? "The seller"} is shipping ${goods} from ${route}${b.destinationType.value ? ` (${b.destinationType.value.toLowerCase()})` : ""}.`,
-    `${num(b.pallets.value)} pallet${b.pallets.value === 1 ? "" : "s"}, ${num(b.cartons.value)} cartons, ${kg(b.grossWeight.value)}, declared ${gbp(b.declaredValue.value)}.`,
+    `${b.sellerName.value ?? "The seller"} is shipping ${goods}${route}${b.destinationType.value ? ` (${b.destinationType.value.toLowerCase()})` : ""}.`,
   ];
+  if (load.length) parts.push(`${load.join(", ")}.`);
   if (sel) parts.push(`Carrier: ${sel.option.carrier} ${sel.option.service}, ${gbp(sel.totalCost, 0)} for ${num(b.pallets.value)} pallet${b.pallets.value === 1 ? "" : "s"}.`);
   if (verdict === "blocked" || verdict === "incomplete") parts.push("This is a provisional summary: the booking becomes ready once the issues above are resolved.");
 

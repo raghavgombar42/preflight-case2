@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Bot, Check, Loader2, RotateCcw, Send, ShieldCheck, User, WifiOff } from "lucide-react";
+import { Bot, Check, Loader2, PenLine, RotateCcw, Send, ShieldCheck, User, WifiOff } from "lucide-react";
 import { analyze, describeKey } from "@/core/analyze";
 import { fieldOf } from "@/ui/field-editor";
 import {
@@ -183,7 +183,7 @@ export function BookApp() {
           <p className="mt-1 text-sm text-ink-3">Today: {formatDate(today)} (IST) · UK → Germany, France or the Netherlands</p>
         </div>
         <div className="flex items-center gap-2">
-          {started && done === 4 && <VerdictChip verdict={analysis.verdict} />}
+          {done === 4 && <VerdictChip verdict={analysis.verdict} />}
           <Button
             size="sm"
             onClick={() => {
@@ -196,24 +196,36 @@ export function BookApp() {
         </div>
       </div>
 
-      <ol className="grid grid-cols-4 gap-2" aria-label={`Booking progress: ${done} of 4 stages complete`}>
+      <ol className="grid grid-cols-2 gap-2 sm:grid-cols-4" aria-label={`Booking progress: ${done} of 4 stages complete`}>
         {progress.map((p, i) => {
-          const complete = started && p.open === 0;
-          const active = started && p.stage === current;
+          // Stages follow real completion: a stage is done only when none of its required details are missing.
+          const complete = p.open === 0;
+          const active = p.stage === current;
+          const state = complete ? "Done" : active ? "In progress" : "To do";
           return (
             <li
               key={p.stage}
               className={cx(
-                "flex items-center gap-2 rounded-xl px-3 py-2.5 text-sm",
-                complete ? "bg-green-soft text-green" : active ? "bg-brand-soft text-brand ring-2 ring-brand/30" : "bg-white text-ink-3 ring-1 ring-line"
+                "flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm",
+                complete ? "bg-green-soft text-green" : active ? "bg-white text-ink ring-2 ring-brand" : "bg-white/60 text-ink-3 ring-1 ring-line"
               )}
               aria-current={active ? "step" : undefined}
             >
-              <span className={cx("grid h-6 w-6 shrink-0 place-items-center rounded-full text-xs font-semibold", complete ? "bg-green text-white" : active ? "bg-brand text-white" : "bg-grey-soft")}>
-                {complete ? <Check className="h-3.5 w-3.5" aria-label="complete" /> : i + 1}
+              <span
+                className={cx(
+                  "grid h-6 w-6 shrink-0 place-items-center rounded-full text-xs font-semibold",
+                  complete ? "bg-green text-white" : active ? "bg-brand text-white" : "border border-grey-line text-ink-3"
+                )}
+                aria-hidden
+              >
+                {complete ? <Check className="h-3.5 w-3.5" /> : active ? <PenLine className="h-3.5 w-3.5" /> : i + 1}
               </span>
-              <span className="font-medium">{p.stage}</span>
-              {started && !complete && <span className="ml-auto hidden text-xs sm:inline">{p.open} to go</span>}
+              <span className="min-w-0">
+                <span className="block font-medium leading-tight">{p.stage}</span>
+                <span className={cx("block text-[11px] leading-tight", complete ? "text-green" : active ? "text-brand" : "text-ink-3")}>
+                  {complete ? "Done" : active && p.open ? `${p.open} detail${p.open > 1 ? "s" : ""} to go` : state}
+                </span>
+              </span>
             </li>
           );
         })}

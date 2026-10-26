@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   ArrowRight,
   CalendarClock,
+  Check,
   ChevronDown,
   History,
   Info,
@@ -15,7 +16,7 @@ import {
   Truck,
   Undo2,
 } from "lucide-react";
-import type { Analysis } from "@/core/analyze";
+import { analyze, type Analysis } from "@/core/analyze";
 import { ruleMeta, RuleId } from "@/core/config";
 import { applyPatches } from "@/core/edit";
 import {
@@ -70,6 +71,12 @@ export function BookingView({ ws, analysis, onCommit, onUndo, onReset, onAcknowl
   const b = ws.current;
   const a = analysis;
   const [error, setError] = useState<string | null>(null);
+  const [flash, setFlash] = useState<string | null>(null);
+  useEffect(() => {
+    if (!flash) return;
+    const t = setTimeout(() => setFlash(null), 5000);
+    return () => clearTimeout(t);
+  }, [flash]);
   const apply: ApplyFn = (patches, label, source = "fix") => {
     const { booking, errors } = applyPatches(b, patches, "edited");
     if (errors.length) {
@@ -77,6 +84,12 @@ export function BookingView({ ws, analysis, onCommit, onUndo, onReset, onAcknowl
       return;
     }
     setError(null);
+    if (source === "fix") {
+      // Brief success feedback naming every rule the fix cleared.
+      const after = new Set(analyze(booking, a.today).findings.map((f) => f.key));
+      const cleared = uniqRules(a.findings.filter((f) => !after.has(f.key)).map((f) => f.key)).filter((r) => r !== "DATA");
+      setFlash(cleared.length ? `Fix applied · cleared ${cleared.join(", ")}` : "Fix applied");
+    }
     onCommit(booking, label, source);
   };
   const ambers = a.findings.filter((f) => f.severity === "amber");
@@ -88,6 +101,11 @@ export function BookingView({ ws, analysis, onCommit, onUndo, onReset, onAcknowl
       <Hero ws={ws} analysis={a} onUndo={onUndo} onReset={onReset} onApply={apply} />
       <div aria-live="polite">
         {error && <div className="rounded-lg border border-red-line bg-red-soft px-4 py-2 text-sm text-red">{error}</div>}
+        {flash && (
+          <div key={flash} className="reveal flex items-center gap-2 rounded-lg bg-green-soft px-4 py-2 text-sm font-medium text-green ring-1 ring-inset ring-green-line">
+            <Check className="h-4 w-4" aria-hidden /> {flash}
+          </div>
+        )}
       </div>
       {showGuided && <GuidedForm booking={b} onApply={apply} />}
 
@@ -144,6 +162,9 @@ function nextAction(a: Analysis): { text: string; action?: { f: Finding; act: Fi
     }
     return { text: `Start with ${reds[0].ruleId}: ${reds[0].title}.` };
   }
+  if (a.verdict === "incomplete" && a.booking.mode === "chat") {
+    return { text: "Answer the questions in the chat, or fill in the guided booking fields below." };
+  }
   if (a.verdict === "incomplete") {
     const names = a.findings
       .filter((f) => f.severity === "incomplete")
@@ -170,17 +191,33 @@ function Hero({ ws, analysis, onUndo, onReset, onApply }: { ws: Workspace; analy
   const edited = ws.history.length > 0;
   const next = nextAction(analysis);
   return (
-    <section className={cx("rounded-2xl border px-5 py-5 sm:px-6", s.banner)} aria-labelledby="verdict-title">
+    <section key={analysis.verdict} className={cx("reveal rounded-2xl border px-5 py-5 sm:px-6", s.banner)} aria-labelledby="verdict-title">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-ink-2">
-            <span className="font-semibold text-ink">{b.ref.value ?? "(no Booking ID)"}</span>
-            <span>{b.sellerName.value ?? "Seller not given"}</span>
-            <span className="inline-flex items-center gap-1">
-              <MapPin className="h-3.5 w-3.5 text-ink-3" aria-hidden />
-              {b.originCity.value ?? "?"} <ArrowRight className="h-3 w-3" aria-label="to" /> {b.destCity.value ?? "?"}
-              {b.destCountry.value ? `, ${b.destCountry.value}` : ""}
-            </span>
+            {b.mode === "chat" ? (
+              <span className="font-semibold text-ink">{b.sellerName.value ?? "New shipment"}</span>
+            ) : (
+              <>
+                <span className="font-semibold text-ink">{b.ref.value ?? "(no Booking ID)"}</span>
+                {b.sellerName.value && <span>{b.sellerName.value}</span>}
+              </>
+            )}
+            {(b.originCity.value || b.destCity.value) && (
+              <span className="inline-flex items-center gap-1">
+                <MapPin className="h-3.5 w-3.5 text-ink-3" aria-hidden />
+                {b.originCity.value && b.destCity.value ? (
+                  <>
+                    {b.originCity.value} <ArrowRight className="h-3 w-3" aria-label="to" /> {b.destCity.value}
+                    {b.destCountry.value ? `, ${b.destCountry.value}` : ""}
+                  </>
+                ) : b.originCity.value ? (
+                  `From ${b.originCity.value}`
+                ) : (
+                  `To ${b.destCity.value}${b.destCountry.value ? `, ${b.destCountry.value}` : ""}`
+                )}
+              </span>
+            )}
             {b.sellerPriority.value && <span>Priority: {b.sellerPriority.value}</span>}
             {b.sourceRow && <span className="text-ink-3">Bookings row {b.sourceRow}</span>}
             {b.isTemplateExample && <span className="rounded-full bg-white/70 px-2 py-0.5 text-xs text-ink-3">template example</span>}
@@ -238,7 +275,11 @@ const ITEM_GUIDED: ItemField[] = ["description", "quantity", "unitPrice", "units
 const open = (fv: FieldValue<unknown> | null) => !!fv && (fv.status === "missing" || fv.status === "invalid");
 
 function GuidedForm({ booking, onApply }: { booking: Booking; onApply: ApplyFn }) {
-  const save = (p: Patch, label: string) => onApply([p], label, "edit");
+  const [updated, setUpdated] = useState<string | null>(null);
+  const save = (p: Patch, label: string) => {
+    onApply([p], label, "edit");
+    setUpdated(label);
+  };
   const route = STAGE_FIELDS[0].fields.filter((f) => open(booking[f] as FieldValue<unknown>));
   const later = STAGE_FIELDS.slice(1).map((s) => ({
     stage: s.stage,
@@ -253,8 +294,15 @@ function GuidedForm({ booking, onApply }: { booking: Booking; onApply: ApplyFn }
 
   return (
     <Card>
-      <CardHead title="Guided booking" sub="Answer in the chat or fill these fields directly. Checks re-run after every change." />
+      <CardHead title="Guided booking" sub="Answer in the chat or fill these fields. Changes save when you pick a value or leave a field." />
       <div className="space-y-4 px-5 pb-5 pt-1">
+        <p aria-live="polite" className="min-h-4 text-xs text-green">
+          {updated && (
+            <span key={updated} className="reveal inline-flex items-center gap-1">
+              <Check className="h-3.5 w-3.5" aria-hidden /> Updated · {updated}
+            </span>
+          )}
+        </p>
         {groups.map((g) => (
           <div key={g.stage}>
             <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink-3">{g.stage}</div>
@@ -263,7 +311,7 @@ function GuidedForm({ booking, onApply }: { booking: Booking; onApply: ApplyFn }
             ) : (
               <div className="grid gap-2 sm:grid-cols-2">
                 {g.refs.map((r) => (
-                  <FieldEditor key={`${r.scope}-${"itemId" in r ? r.itemId : ""}-${r.field}`} booking={booking} fref={r} onSave={save} />
+                  <FieldEditor key={`${r.scope}-${"itemId" in r ? r.itemId : ""}-${r.field}`} booking={booking} fref={r} onSave={save} autoSave />
                 ))}
               </div>
             )}
@@ -464,7 +512,9 @@ function CarrierCard({ analysis, onApply }: { analysis: Analysis; onApply: Apply
             <Truck className="h-5 w-5" aria-hidden />
           </div>
           <div className="min-w-0">
-            <div className="text-lg font-semibold leading-tight text-ink">{sel ? `${sel.option.carrier} · ${sel.option.service}` : d.headline}</div>
+            <div className="text-lg font-semibold leading-tight text-ink">
+              {sel ? `${sel.option.carrier} · ${sel.option.service}` : d.status === "missing-inputs" ? "Carrier comparison" : d.headline}
+            </div>
             {d.chosen && <div className="text-xs text-ink-3">Chosen by the seller</div>}
           </div>
         </div>
@@ -484,7 +534,9 @@ function CarrierCard({ analysis, onApply }: { analysis: Analysis; onApply: Apply
             </div>
           </dl>
         )}
-        <p className="text-sm text-ink-2">{d.reason}</p>
+        <p className="text-sm text-ink-2">
+          {d.status === "missing-inputs" ? "Add the destination, pallets and gross weight to compare the three services." : d.reason}
+        </p>
         {runnerUp && (
           <p className="text-sm text-ink-2">
             <span className="font-medium text-ink">Runner-up:</span> {runnerUp.option.carrier} {runnerUp.option.shortName} · {runnerUp.versusRecommended}
@@ -577,6 +629,18 @@ function ConfirmationCard({ analysis, allAcked, ambers }: { analysis: Analysis; 
           ? `Ready for booking · ${ambers} warning${ambers > 1 ? "s" : ""} acknowledged`
           : "Ready once warnings are acknowledged"
         : "Not ready yet · provisional";
+  const b = analysis.booking;
+  const hasBasics = b.items.length > 0 && !!b.originCity.value && !!b.destCity.value;
+  if (!hasBasics) {
+    return (
+      <Card>
+        <CardHead title="Confirmation & next steps" />
+        <p className="px-5 pb-5 pt-1 text-sm text-ink-2">
+          Add shipment details to generate a pre-flight summary, carrier recommendation and next-step timeline.
+        </p>
+      </Card>
+    );
+  }
   return (
     <Card>
       <CardHead title="Confirmation & next steps" right={<span className={cx("rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset", VERDICT_STYLE[v].chip)}>{title}</span>} />
