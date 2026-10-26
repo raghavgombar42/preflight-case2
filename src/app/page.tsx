@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { RouteMotif } from "@/ui/route-motif";
 import { ArrowRight, FileSpreadsheet, MessageSquareText, PlayCircle, ShieldCheck, Truck, Wrench } from "lucide-react";
 
 export default function Home() {
@@ -13,6 +14,9 @@ export default function Home() {
           Every booking is checked against the 10-rule rulebook. Each problem comes with its evidence and a fix, and the carrier is chosen to fit the
           seller’s priority.
         </p>
+        <div className="mt-8">
+          <RouteMotif />
+        </div>
       </section>
 
       <section className="mx-auto grid max-w-4xl gap-4 md:grid-cols-2" aria-label="Start">

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeft, Download, FileSpreadsheet, FlaskConical, Search, Upload } from "lucide-react";
 import { Analysis, analyze } from "@/core/analyze";
+import { batchAction } from "@/core/batch";
 import { RULES, RuleId } from "@/core/config";
 import { Booking } from "@/core/model";
 import { istToday, gbp } from "@/core/values";
@@ -291,6 +292,7 @@ function Queue({
     for (const id of new Set(r.a.findings.map((f) => f.ruleId))) ruleHits.set(id, (ruleHits.get(id) ?? 0) + 1);
   }
   const top = [...ruleHits.entries()].sort((a, b) => b[1] - a[1])[0];
+  const action = batchAction(rows.map((r) => ({ uid: r.w.current.uid, ref: r.w.current.ref.value ?? "(no ID)", analysis: r.a })));
   const shown = rows.filter(
     (r) =>
       (filter === "all" || r.a.verdict === filter) &&
@@ -337,11 +339,21 @@ function Queue({
             </button>
           ))}
         </div>
-        {top && (
-          <p className="mt-4 border-t border-line pt-3 text-sm text-ink-2">
-            <span className="font-medium text-ink">Most common issue:</span> {label(top[0])} in {top[1]} booking{top[1] > 1 ? "s" : ""}
+        <div className="mt-4 space-y-1 border-t border-line pt-3 text-sm text-ink-2">
+          <p>
+            {action.sentence}{" "}
+            {action.start && (
+              <button className="font-medium text-brand hover:underline" onClick={() => onOpen(action.start!.uid)}>
+                {action.start.text} →
+              </button>
+            )}
           </p>
-        )}
+          {top && (
+            <p>
+              <span className="font-medium text-ink">Most common issue:</span> {label(top[0])} in {top[1]} booking{top[1] > 1 ? "s" : ""}
+            </p>
+          )}
+        </div>
       </Card>
 
       {(error || session.unmatchedItems.length > 0 || session.fileNotes.length > 0 || session.duplicateRefs.length > 0) && (

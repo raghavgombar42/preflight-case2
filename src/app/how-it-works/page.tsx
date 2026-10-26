@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { RATE_CARD, RULES } from "@/core/config";
 
-export const metadata: Metadata = { title: "How it works · Pre-Flight" };
+export const metadata: Metadata = { title: "How it works · Wheels Up" };
 
 const ASSUMPTIONS = [
   ["R-02 tolerance", "“Within 1%” is measured against the item total: |declared − Σ(qty × price)| ÷ Σ ≤ 1%. Exactly 1% passes. Compared in pence."],

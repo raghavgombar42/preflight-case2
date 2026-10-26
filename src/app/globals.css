@@ -84,8 +84,29 @@ details > summary::-webkit-details-marker {
 .reveal {
   animation: reveal 200ms ease-out both;
 }
+@keyframes route-draw {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+.route-line {
+  transform-origin: left center;
+  animation: route-draw 700ms ease-out both;
+}
+.route-node {
+  animation: reveal 250ms ease-out both;
+}
+.route-arrow {
+  animation: reveal 250ms ease-out 700ms both;
+}
 @media (prefers-reduced-motion: reduce) {
-  .reveal {
+  .reveal,
+  .route-line,
+  .route-node,
+  .route-arrow {
     animation: none;
   }
   * {

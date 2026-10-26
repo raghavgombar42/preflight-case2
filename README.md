@@ -1,4 +1,4 @@
-# Pre-Flight · UK → EU shipment booking & error checker
+# Wheels Up · pre-flight checks for UK → EU shipments
 
 Case 2, Mesa AI × Ops Hackathon (October 2026). Live: https://preflight-case2-sepia.vercel.app
 

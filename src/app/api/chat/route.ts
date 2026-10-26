@@ -115,7 +115,7 @@ function limited(ip: string) {
 async function viaOpenRouter(key: string, model: string, sys: string, prompt: string, timeoutMs: number) {
   const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
     method: "POST",
-    headers: { authorization: `Bearer ${key}`, "content-type": "application/json", "x-title": "Pre-Flight" },
+    headers: { authorization: `Bearer ${key}`, "content-type": "application/json", "x-title": "Wheels Up" },
     body: JSON.stringify({
       model,
       temperature: 0,
