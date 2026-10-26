@@ -108,7 +108,9 @@ describe("R-06 phrase handling", () => {
     ["Aerosol deodorant 150ml", "aerosol"],
     ["Nail polish remover", "flammable"],
     ["Eau de parfum 50 ml", "flammable"],
-    ["AA batteries pack of 4", "lithium"],
+    ["AA batteries pack of 4", "generic-battery"],
+    ["Lithium-ion power bank 10000mAh", "lithium"],
+    ["Spare battery pack, chemistry not stated", "generic-battery"],
     ["Bluetooth speaker", "likely-battery"],
     ["Laptop 14 inch", "likely-battery"],
   ])("%s → %s", (desc, kind) => {
@@ -231,5 +233,26 @@ describe("advisories never change the verdict", () => {
     const a = run(booking({}, [{ description: "Mug, made in China" }]));
     expect(a.verdict).toBe("passed");
     expect(a.advisories.some((x) => x.key.startsWith("origin-mismatch"))).toBe(true);
+  });
+});
+
+describe("R-06 battery outcomes", () => {
+  it("explicit lithium is restricted outright with no confirm option", () => {
+    const a = run(booking({}, [{ description: "Lithium-ion power bank 10000mAh" }]));
+    const f = a.findings.find((x) => x.ruleId === "R-06")!;
+    expect(f.title).toMatch(/lithium battery \(restricted dangerous goods\)/);
+    expect(f.fix.actions.map((x) => x.id)).toEqual(["r06-remove"]);
+  });
+  it("a generic battery asks for chemistry and stays Red until confirmed", () => {
+    const b = booking({}, [{ description: "AA batteries, pack of 4" }]);
+    const f = run(b).findings.find((x) => x.ruleId === "R-06")!;
+    expect(f.severity).toBe("red");
+    expect(f.title).toMatch(/battery chemistry must be confirmed/);
+    expect(f.detail).toMatch(/cannot accept lithium batteries/);
+    expect(run(applyPatch(b, { kind: "r06Clear", itemId: "it-1" }).booking).verdict).toBe("passed");
+  });
+  it("aerosols and flammables are unchanged and can't be cleared by confirmation", () => {
+    const b = applyPatch(booking({}, [{ description: "Aerosol deodorant 150ml" }]), { kind: "r06Clear", itemId: "it-1" }).booking;
+    expect(run(b).verdict).toBe("blocked");
   });
 });

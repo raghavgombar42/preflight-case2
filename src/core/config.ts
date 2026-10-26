@@ -197,8 +197,8 @@ export function ruleMeta(id: RuleId): RuleMeta {
 // R-06 phrase lists. Matching is whole-word and case-insensitive.
 export const R06_CLEAR: Record<"lithium" | "aerosol" | "flammable", string[]> = {
   lithium: [
-    "lithium", "li-ion", "li ion", "lithium-ion", "li-po", "lipo", "lithium polymer",
-    "power bank", "powerbank", "battery", "batteries", "battery pack", "rechargeable battery",
+    "lithium", "li-ion", "li ion", "lithium-ion", "li-po", "lipo", "lithium polymer", "lifepo4",
+    "power bank", "powerbank", "power banks",
   ],
   aerosol: [
     "aerosol", "aerosols", "spray can", "spray cans", "hairspray", "hair spray", "deodorant spray",
@@ -213,6 +213,12 @@ export const R06_CLEAR: Record<"lithium" | "aerosol" | "flammable", string[]> = 
     "petrol", "gasoline", "diesel", "kerosene", "lamp oil", "ethanol",
   ],
 };
+
+// A battery is mentioned but its chemistry isn't: it may or may not be lithium.
+export const R06_GENERIC_BATTERY: string[] = [
+  "battery", "batteries", "battery pack", "battery packs", "rechargeable battery", "rechargeable batteries",
+  "button cell", "button cells", "coin cell", "coin cells",
+];
 
 export const R06_LIKELY_BATTERY: string[] = [
   "laptop", "laptops", "notebook computer", "smartphone", "smartphones", "mobile phone", "mobile phones",

@@ -17,13 +17,13 @@ export const VERDICT_STYLE: Record<Verdict, { label: string; chip: string; banne
     icon: <OctagonX className="h-5 w-5" aria-hidden />,
   },
   incomplete: {
-    label: "Incomplete",
+    label: "Missing details",
     chip: "bg-grey-soft text-grey ring-grey-line",
     banner: "border-grey-line bg-grey-soft text-grey",
     icon: <CircleDashed className="h-5 w-5" aria-hidden />,
   },
   warnings: {
-    label: "Passed with warnings",
+    label: "Needs review",
     chip: "bg-amber-soft text-amber ring-amber-line",
     banner: "border-amber-line bg-amber-soft text-amber",
     icon: <AlertTriangle className="h-5 w-5" aria-hidden />,
@@ -100,7 +100,7 @@ export function SourceBadge({ source }: { source: FieldSource }) {
 
 export function Card({ children, className, id }: { children: React.ReactNode; className?: string; id?: string }) {
   return (
-    <section id={id} className={cx("print-break rounded-xl border border-line bg-panel shadow-[0_1px_2px_rgba(16,24,40,0.04)]", className)}>
+    <section id={id} className={cx("print-break rounded-2xl bg-panel ring-1 ring-line/80 shadow-[0_1px_3px_rgba(16,24,40,0.05)]", className)}>
       {children}
     </section>
   );
@@ -108,9 +108,9 @@ export function Card({ children, className, id }: { children: React.ReactNode; c
 
 export function CardHead({ title, sub, right }: { title: string; sub?: React.ReactNode; right?: React.ReactNode }) {
   return (
-    <div className="flex flex-wrap items-start justify-between gap-2 border-b border-line px-4 py-3">
+    <div className="flex flex-wrap items-start justify-between gap-2 px-5 pb-2 pt-4">
       <div>
-        <h2 className="text-sm font-semibold text-ink">{title}</h2>
+        <h2 className="text-base font-semibold text-ink">{title}</h2>
         {sub ? <p className="mt-0.5 text-xs text-ink-3">{sub}</p> : null}
       </div>
       {right}

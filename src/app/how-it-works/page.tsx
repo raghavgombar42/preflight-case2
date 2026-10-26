@@ -16,39 +16,78 @@ const ASSUMPTIONS = [
   ["Verdict", "Blocked (any red) → Incomplete (missing details) → Passed with warnings (amber only) → Passed. The final state is “Ready for booking”: this MVP does not place the order with a carrier."],
 ];
 
+const STEPS = [
+  { t: "Input", d: "Chat or the Bookings + Items workbook" },
+  { t: "Booking model", d: "Raw value, clean value and source per field" },
+  { t: "10 checks", d: "Plus missing details, each with evidence" },
+  { t: "Carrier", d: "Eligible by weight, then ranked by priority" },
+  { t: "Result", d: "Verdict, fixes, carrier and next steps" },
+];
+
+function Disclosure({ title, sub, children, open }: { title: string; sub: string; children: React.ReactNode; open?: boolean }) {
+  return (
+    <details className="group rounded-2xl bg-white ring-1 ring-line" open={open}>
+      <summary className="flex items-center justify-between gap-3 px-5 py-4">
+        <div>
+          <h2 className="text-base font-semibold">{title}</h2>
+          <p className="text-xs text-ink-3">{sub}</p>
+        </div>
+        <span className="text-sm font-medium text-brand group-open:hidden">Show</span>
+        <span className="hidden text-sm font-medium text-brand group-open:inline">Hide</span>
+      </summary>
+      <div className="border-t border-line">{children}</div>
+    </details>
+  );
+}
+
 export default function Page() {
   return (
-    <div className="mx-auto max-w-4xl space-y-8">
+    <div className="mx-auto max-w-4xl space-y-8 py-4">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">How it works</h1>
-        <p className="mt-2 text-ink-2">
-          Every check, total and carrier ranking is computed by deterministic code from the official rulebook and rate card, so the same booking
-          always gets the same answer. AI is used only to turn chat messages into structured edits; those edits are validated before anything
-          changes, and the app keeps working (via a guided form) if the AI is unavailable.
+        <h1 className="text-3xl font-semibold tracking-tight">How it works</h1>
+        <p className="mt-2 max-w-2xl text-ink-2">
+          Code decides, AI only talks. Every check, total and ranking comes from the official rulebook and rate card, so the same booking always gets the
+          same answer.
         </p>
       </div>
 
-      <section className="rounded-xl border border-line bg-white">
-        <h2 className="border-b border-line px-5 py-3 text-sm font-semibold">Flow</h2>
-        <ol className="grid gap-px bg-line sm:grid-cols-5">
-          {[
-            ["Input", "Chat message or uploaded Bookings + Items sheets"],
-            ["One booking model", "Raw value, clean value and source kept for every field"],
-            ["Checks", "10 rules + missing-detail check, each with evidence"],
-            ["Carrier", "Eligible by weight first, then ranked by priority"],
-            ["Result", "Verdict, fixes, carrier, confirmation and next steps"],
-          ].map(([t, d], i) => (
-            <li key={t} className="bg-white p-4">
-              <div className="text-xs font-semibold text-brand">Step {i + 1}</div>
-              <div className="font-medium">{t}</div>
-              <div className="text-sm text-ink-2">{d}</div>
-            </li>
-          ))}
-        </ol>
-      </section>
+      <ol className="grid gap-3 sm:grid-cols-5" aria-label="Five-step flow">
+        {STEPS.map((s, i) => (
+          <li key={s.t} className="relative rounded-2xl bg-white p-4 ring-1 ring-line">
+            <span className="grid h-7 w-7 place-items-center rounded-full bg-brand text-xs font-semibold text-white" aria-hidden>
+              {i + 1}
+            </span>
+            <div className="mt-3 font-semibold">{s.t}</div>
+            <div className="mt-1 text-sm text-ink-2">{s.d}</div>
+          </li>
+        ))}
+      </ol>
 
-      <section className="rounded-xl border border-line bg-white">
-        <h2 className="border-b border-line px-5 py-3 text-sm font-semibold">Rulebook</h2>
+      <div className="grid gap-4 sm:grid-cols-3">
+        {[
+          ["AI’s only job", "Turn a chat message into proposed edits. Code validates each one before anything changes."],
+          ["If AI is down", "A built-in parser and the guided booking fields take over. Every check still runs."],
+          ["Nothing silent", "Fixes need the seller’s click, every change is logged, and the upload is never modified."],
+        ].map(([t, d]) => (
+          <div key={t} className="rounded-2xl bg-canvas p-4">
+            <div className="text-sm font-semibold">{t}</div>
+            <div className="mt-1 text-sm text-ink-2">{d}</div>
+          </div>
+        ))}
+      </div>
+
+      <Disclosure title="Decisions and assumptions" sub={`${ASSUMPTIONS.length} judgement calls, each written down`}>
+        <dl className="divide-y divide-line">
+          {ASSUMPTIONS.map(([k, v]) => (
+            <div key={k} className="grid gap-1 px-5 py-3 text-sm sm:grid-cols-[200px_minmax(0,1fr)]">
+              <dt className="font-medium">{k}</dt>
+              <dd className="text-ink-2">{v}</dd>
+            </div>
+          ))}
+        </dl>
+      </Disclosure>
+
+      <Disclosure title="Rulebook" sub="R-01 to R-10 · six Red (block), four Amber (warn)">
         <table className="w-full text-sm">
           <tbody className="divide-y divide-line">
             {RULES.map((r) => (
@@ -63,10 +102,9 @@ export default function Page() {
             ))}
           </tbody>
         </table>
-      </section>
+      </Disclosure>
 
-      <section className="rounded-xl border border-line bg-white">
-        <h2 className="border-b border-line px-5 py-3 text-sm font-semibold">Rate card (fixed)</h2>
+      <Disclosure title="Rate card" sub="Fixed · 3 services × 3 destination countries">
         <div className="overflow-x-auto">
           <table className="w-full min-w-[560px] text-sm">
             <thead className="bg-canvas text-left text-xs text-ink-3">
@@ -96,22 +134,9 @@ export default function Page() {
           </table>
         </div>
         <p className="border-t border-line px-5 py-3 text-xs text-ink-3">
-          Weight bands: up to 400 kg per pallet all three services are eligible; 400–500 kg Economy and Standard; 500–750 kg Standard only; above
-          750 kg none.
+          Weight bands: up to 400 kg per pallet all three services qualify; 400–500 kg Economy and Standard; 500–750 kg Standard only; above 750 kg none.
         </p>
-      </section>
-
-      <section className="rounded-xl border border-line bg-white">
-        <h2 className="border-b border-line px-5 py-3 text-sm font-semibold">Decisions and assumptions</h2>
-        <dl className="divide-y divide-line">
-          {ASSUMPTIONS.map(([k, v]) => (
-            <div key={k} className="grid gap-1 px-5 py-3 text-sm sm:grid-cols-[200px_minmax(0,1fr)]">
-              <dt className="font-medium">{k}</dt>
-              <dd className="text-ink-2">{v}</dd>
-            </div>
-          ))}
-        </dl>
-      </section>
+      </Disclosure>
     </div>
   );
 }

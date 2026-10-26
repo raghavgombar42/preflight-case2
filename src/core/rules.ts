@@ -5,6 +5,7 @@
 
 import {
   R06_CLEAR,
+  R06_GENERIC_BATTERY,
   R06_LIKELY_BATTERY,
   R06_NEGATIONS,
   RuleId,
@@ -407,7 +408,9 @@ function findPhrase(text: string, phrases: string[]): string | null {
   return null;
 }
 
-export function r06Match(description: string): { kind: "lithium" | "aerosol" | "flammable" | "likely-battery"; phrase: string } | null {
+export type R06Kind = "lithium" | "aerosol" | "flammable" | "generic-battery" | "likely-battery";
+
+export function r06Match(description: string): { kind: R06Kind; phrase: string } | null {
   const t = stripNegations(description);
   // Empty containers (e.g. "glass perfume bottles, empty") hold no liquid or gas.
   const emptyContainer =
@@ -417,10 +420,15 @@ export function r06Match(description: string): { kind: "lithium" | "aerosol" | "
     const p = findPhrase(t, R06_CLEAR[kind]);
     if (p) return { kind, phrase: p };
   }
+  const g = findPhrase(t, R06_GENERIC_BATTERY);
+  if (g) return { kind: "generic-battery", phrase: g };
   const p = findPhrase(t, R06_LIKELY_BATTERY);
   return p ? { kind: "likely-battery", phrase: p } : null;
 }
 
+// Three battery outcomes, all Red: explicit lithium is restricted outright; a
+// generic battery or a device that usually has one is blocked until the seller
+// confirms it is not lithium.
 export function r06(b: Booking): RuleResult {
   if (b.items.length === 0) return result("R-06", "cannot-check", "No items to check.");
   const fs: Finding[] = [];
@@ -430,12 +438,17 @@ export function r06(b: Booking): RuleResult {
     if (!desc) continue;
     const m = r06Match(desc);
     if (!m) continue;
-    if (m.kind === "likely-battery" && b.r06Cleared.includes(it.id)) {
+    const confirmable = m.kind === "likely-battery" || m.kind === "generic-battery";
+    if (confirmable && b.r06Cleared.includes(it.id)) {
       cleared++;
       continue;
     }
     const name = itemLabel(it);
     const fields: FieldRef[] = [{ scope: "item", itemId: it.id, field: "description" }];
+    const evidence = [
+      { label: "Description", value: desc },
+      { label: "Matched phrase", value: m.phrase },
+    ];
     const remove: FixAction = {
       id: "r06-remove",
       label: `Remove ${name} from this shipment`,
@@ -447,11 +460,8 @@ export function r06(b: Booking): RuleResult {
       fs.push(
         finding("R-06", b, it, {
           title: `${name}: likely contains a lithium battery`,
-          detail: `"${desc}" matches "${m.phrase}". Devices like this usually have a built-in lithium battery, which carriers reject whether loose or inside a product. Needs seller confirmation.`,
-          evidence: [
-            { label: "Description", value: desc },
-            { label: "Matched phrase", value: m.phrase },
-          ],
+          detail: `"${desc}" matches "${m.phrase}". Devices like this usually have a built-in lithium battery, which carriers reject whether loose or inside a product. Blocked until the seller confirms.`,
+          evidence,
           fix: {
             text: "Confirm the item contains no battery, or remove it from this shipment.",
             confidence: "confirm",
@@ -465,20 +475,35 @@ export function r06(b: Booking): RuleResult {
       );
       continue;
     }
-    const label = { lithium: "lithium battery", aerosol: "aerosol", flammable: "flammable liquid" }[m.kind];
+    if (m.kind === "generic-battery") {
+      fs.push(
+        finding("R-06", b, it, {
+          title: `${name}: battery chemistry must be confirmed`,
+          detail: `"${desc}" mentions "${m.phrase}" without saying what kind. This service cannot accept lithium batteries, so the chemistry must be confirmed before the shipment can go.`,
+          evidence,
+          fix: {
+            text: "Confirm the batteries are not lithium (for example alkaline), or remove them from this shipment.",
+            confidence: "confirm",
+            actions: [
+              { id: "r06-confirm", label: "Seller confirms: not lithium", patches: [{ kind: "r06Clear", itemId: it.id }], confidence: "confirm" },
+              remove,
+            ],
+          },
+          fields,
+        })
+      );
+      continue;
+    }
+    const label = { lithium: "lithium battery (restricted dangerous goods)", aerosol: "aerosol", flammable: "flammable liquid" }[m.kind];
     const fixText =
       m.kind === "lithium"
-        ? "Lithium batteries can't travel on these standard road services, whether loose or built into a product. Remove the item, or correct the description if it contains no battery."
+        ? "Lithium batteries can't travel on these standard road services, whether loose or built into a product. Remove the item, or correct the description if it contains no lithium battery."
         : "Not accepted on these standard services. Items like this need a specialist dangerous-goods road service (ADR) with a proper declaration and approved packaging. Remove the item or book it separately.";
     fs.push(
       finding("R-06", b, it, {
         title: `${name}: ${label}`,
         detail: `"${desc}" matches the restricted phrase "${m.phrase}".`,
-        evidence: [
-          { label: "Description", value: desc },
-          { label: "Matched phrase", value: m.phrase },
-          { label: "Category", value: label },
-        ],
+        evidence: [...evidence, { label: "Category", value: label }],
         fix: { text: fixText, confidence: "confirm", actions: [remove] },
         fields,
       })

@@ -11,7 +11,12 @@ import { CHAT_OPS } from "@/core/chat";
 import { ALL_DEST_CITIES, DEST_CITIES, ITEM_ORIGINS, ORIGIN_CITIES } from "@/core/config";
 import { istToday } from "@/core/values";
 
-export const maxDuration = 60;
+export const maxDuration = 20;
+
+// The whole AI attempt must finish well inside the browser's 12 s budget, so a
+// seller never waits long before the deterministic fallback takes over.
+const BUDGET_MS = 10_000;
+const MIN_ATTEMPT_MS = 2_500;
 
 const scalar = z.union([z.string(), z.number()]).nullable().optional();
 
@@ -107,7 +112,7 @@ function limited(ip: string) {
 
 // OpenRouter (OpenAI-compatible) route to Gemini, used when only an
 // OPENROUTER_API_KEY is configured.
-async function viaOpenRouter(key: string, model: string, sys: string, prompt: string) {
+async function viaOpenRouter(key: string, model: string, sys: string, prompt: string, timeoutMs: number) {
   const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
     method: "POST",
     headers: { authorization: `Bearer ${key}`, "content-type": "application/json", "x-title": "Pre-Flight" },
@@ -123,7 +128,7 @@ async function viaOpenRouter(key: string, model: string, sys: string, prompt: st
         { role: "user", content: prompt },
       ],
     }),
-    signal: AbortSignal.timeout(25_000),
+    signal: AbortSignal.timeout(timeoutMs),
   });
   if (!res.ok) throw new Error(`OpenRouter ${res.status}: ${(await res.text()).slice(0, 200)}`);
   const j = await res.json();
@@ -149,6 +154,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false, reason: "bad-request" }, { status: 400 });
   }
 
+  const started = Date.now();
+  const remaining = () => BUDGET_MS - (Date.now() - started);
   const today = istToday();
   const prompt = `Current booking (values null = not provided yet; "UNKNOWN" = seller said they don't know):
 ${JSON.stringify(body.booking).slice(0, 20000)}
@@ -163,6 +170,7 @@ Seller message:
     const google = createGoogleGenerativeAI({ apiKey });
     const models = (process.env.GEMINI_MODEL ? [process.env.GEMINI_MODEL] : []).concat(["gemini-3.8-flash", "gemini-3-flash", "gemini-2.5-flash"]);
     for (const model of [...new Set(models)]) {
+      if (remaining() < MIN_ATTEMPT_MS) break;
       try {
         const { object } = await generateObject({
           model: google(model),
@@ -170,8 +178,8 @@ Seller message:
           system: system(today),
           prompt,
           temperature: 0,
-          maxRetries: 1,
-          abortSignal: AbortSignal.timeout(20_000),
+          maxRetries: 0,
+          abortSignal: AbortSignal.timeout(Math.min(remaining(), 9_000)),
         });
         return NextResponse.json({ ok: true, model, edits: object.edits, reply: object.reply });
       } catch (e) {
@@ -182,8 +190,9 @@ Seller message:
   if (orKey) {
     const models = (process.env.OPENROUTER_MODEL ? [process.env.OPENROUTER_MODEL] : []).concat(["google/gemini-2.5-flash", "google/gemini-2.0-flash-001"]);
     for (const model of [...new Set(models)]) {
+      if (remaining() < MIN_ATTEMPT_MS) break;
       try {
-        const object = await viaOpenRouter(orKey, model, system(today), prompt);
+        const object = await viaOpenRouter(orKey, model, system(today), prompt, Math.min(remaining(), 9_000));
         return NextResponse.json({ ok: true, model, edits: object.edits, reply: object.reply });
       } catch (e) {
         console.error(`openrouter ${model} failed:`, (e as Error).message);

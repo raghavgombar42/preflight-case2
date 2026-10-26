@@ -1,10 +1,20 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Bot, Loader2, RotateCcw, Send, User, WifiOff } from "lucide-react";
+import { Bot, Check, Loader2, RotateCcw, Send, ShieldCheck, User, WifiOff } from "lucide-react";
 import { analyze, describeKey } from "@/core/analyze";
 import { fieldOf } from "@/ui/field-editor";
-import { ApplyOutcome, ChatEdit, applyChatEdits, compactBookingForModel, missingQuestions, nextAsk, parseLocally } from "@/core/chat";
+import {
+  ASSIST_DOWN,
+  ApplyOutcome,
+  ChatEdit,
+  applyChatEdits,
+  compactBookingForModel,
+  nextAsk,
+  offlineItemNote,
+  parseLocally,
+  stageProgress,
+} from "@/core/chat";
 import { emptyChatBooking } from "@/core/edit";
 import { Booking } from "@/core/model";
 import { istToday, formatDate } from "@/core/values";
@@ -13,14 +23,18 @@ import { BookingView } from "@/ui/booking-view";
 import { Button, VerdictChip, cx } from "@/ui/bits";
 import { load, save, clear } from "@/ui/persist";
 
-type Msg = { id: string; role: "user" | "assistant"; text: string; meta?: string; offline?: boolean };
-type State = { ws: Workspace; msgs: Msg[]; asked: string[] };
+type Msg = { id: string; role: "user" | "assistant"; text: string; changes?: string[]; offline?: boolean };
+type State = { ws: Workspace; msgs: Msg[]; asked: string[]; assistDown: boolean };
 
-const KEY = "preflight.chat.v1";
+const KEY = "preflight.chat.v2";
+// The browser waits at most this long before using the deterministic fallback.
+const CLIENT_TIMEOUT_MS = 12_000;
+
 const EXAMPLES = [
   "Sending 3 pallets of ceramic mugs from Manchester to an Amazon warehouse in Frankfurt, ready next Friday. Cheapest please.",
   "1080 mugs at £5 each, 12 per carton, 0.5 kg each, HS 691200, made in the UK.",
-  "Total weight is 620 kg and the delivery slot is booked.",
+  "Total weight is 620 kg, the delivery slot is booked, and we're Northfield Goods.",
+  "Add a pallet",
 ];
 
 function fresh(): State {
@@ -30,10 +44,11 @@ function fresh(): State {
       {
         id: "hello",
         role: "assistant",
-        text: "Hi! Tell me about your shipment in your own words: what you're sending, from where to where, and when. I'll fill in the booking, ask only for what's missing, and check it against all 10 rules as we go.",
+        text: "Tell me about your shipment in your own words: what you're sending, from where to where, and when. I'll fill in the booking, ask only for what's missing, and check it against the rulebook after every message.",
       },
     ],
     asked: [],
+    assistDown: false,
   };
 }
 
@@ -49,7 +64,7 @@ export function BookApp() {
   useEffect(() => {
     setToday(istToday());
     const s = load<State>(KEY);
-    setSt(s && s.ws && Array.isArray(s.msgs) ? s : fresh());
+    setSt(s && s.ws && Array.isArray(s.msgs) ? { ...s, assistDown: !!s.assistDown } : fresh());
   }, []);
   useEffect(() => {
     if (st) save(KEY, st);
@@ -61,7 +76,9 @@ export function BookApp() {
 
   const b = st.ws.current;
   const started = st.msgs.some((m) => m.role === "user");
-  const pending = started ? missingQuestions(b).length : 0;
+  const progress = stageProgress(b);
+  const done = progress.filter((p) => p.open === 0).length;
+  const current = progress.find((p) => p.open > 0)?.stage;
 
   const send = async (text: string) => {
     const message = text.trim();
@@ -80,7 +97,7 @@ export function BookApp() {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ message, booking: compactBookingForModel(before.ws.current), asked: before.asked }),
-        signal: AbortSignal.timeout(45_000),
+        signal: AbortSignal.timeout(CLIENT_TIMEOUT_MS),
       });
       const j = await res.json();
       if (j && j.ok && Array.isArray(j.edits)) {
@@ -90,44 +107,49 @@ export function BookApp() {
     } catch {
       offline = true;
     }
-    if (offline) {
-      edits = parseLocally(message, before.ws.current, before.asked, today);
-      reply = edits.length ? "Got it." : "";
-    }
+    if (offline) edits = parseLocally(message, before.ws.current, before.asked, today);
 
     const out: ApplyOutcome = applyChatEdits(before.ws.current, edits);
     const ws = commit(before.ws, out.booking, `Chat: "${message.length > 60 ? `${message.slice(0, 57)}…` : message}"`, "chat", today);
     const after = analyze(out.booking, today);
 
     const lines: string[] = [];
-    // If anything was rejected the model's reply may claim it happened, so
-    // describe the outcome from what was actually applied instead.
-    if (out.rejected.length) {
+    if (offline) {
+      if (out.applied.length) lines.push(`Understood without the language assistant: ${out.applied.join("; ")}.`);
+      const note = offlineItemNote(message, edits, out.booking, before.asked);
+      if (note) lines.push(note);
+      if (!out.applied.length && !note) lines.push("I couldn't read that without the language assistant. Answer the question below in a few words, or use the guided booking fields.");
+      if (out.rejected.length) lines.push(out.rejected.join(" "));
+    } else if (out.rejected.length) {
+      // The model's reply may claim a rejected change happened, so describe what was actually applied.
       if (out.applied.length) lines.push(`Updated: ${out.applied.join("; ")}.`);
       lines.push(out.rejected.join(" "));
     } else if (reply) lines.push(reply);
     if (out.clarifications.length) lines.push(out.clarifications.join(" "));
-    const entry = ws.log[0] && ws !== before.ws ? ws.log[0] : null;
-    let meta: string | undefined;
+
+    const entry = ws !== before.ws ? ws.log[0] : null;
+    const changes: string[] = [];
     if (entry) {
       const beforeA = analyze(before.ws.current, today);
-      // A rule finding that only says "not provided yet" isn't news while we're still collecting.
+      // A rule finding that only says "not provided yet" isn't news while details are still being collected.
       const notYetGiven = (key: string, a: typeof after) => {
         const fd = a.findings.find((x) => x.key === key);
-        return !!fd && fd.fields.length > 0 && fd.fields.every((r) => {
-          const fv = fieldOf(a.booking, r);
-          return !fv || fv.status === "missing" || fv.status === "unknown";
-        });
+        return (
+          !!fd &&
+          fd.fields.length > 0 &&
+          fd.fields.every((r) => {
+            const fv = fieldOf(a.booking, r);
+            return !fv || fv.status === "missing" || fv.status === "unknown";
+          })
+        );
       };
       const fixed = entry.resolvedKeys.filter((k) => !k.startsWith("DATA:") && !notYetGiven(k, beforeA));
       const raised = entry.introducedKeys.filter((k) => !k.startsWith("DATA:") && !notYetGiven(k, after));
-      const bits: string[] = [];
-      const changes = entry.changes.filter((c) => c.before !== "(blank)" && c.before !== "(none)");
-      if (changes.length) bits.push(`Changed: ${changes.slice(0, 3).map((c) => `${c.label} ${c.before} → ${c.after}`).join("; ")}`);
-      if (entry.carrierBefore !== entry.carrierAfter && entry.carrierAfter) bits.push(`Carrier now ${entry.carrierAfter}${entry.carrierBefore ? ` (was ${entry.carrierBefore})` : ""}`);
-      if (fixed.length) bits.push(`Resolved: ${fixed.map((k) => describeKey(k, beforeA.findings)).join("; ")}`);
-      if (raised.length) bits.push(`New issue: ${raised.map((k) => describeKey(k, after.findings)).join("; ")}`);
-      meta = bits.join(" · ") || undefined;
+      for (const c of entry.changes.filter((c) => c.before !== "(blank)" && c.before !== "(none)").slice(0, 3)) changes.push(`${c.label}: ${c.before} → ${c.after}`);
+      if (entry.carrierBefore !== entry.carrierAfter && entry.carrierAfter)
+        changes.push(`Carrier now ${entry.carrierAfter}${entry.carrierBefore ? ` (was ${entry.carrierBefore})` : ""}`);
+      for (const k of fixed) changes.push(`Resolved ${describeKey(k, beforeA.findings)}`);
+      for (const k of raised) changes.push(`New issue ${describeKey(k, after.findings)}`);
     }
     if (!out.clarifications.length) {
       const ask = nextAsk(out.booking);
@@ -135,20 +157,17 @@ export function BookApp() {
       else
         lines.push(
           after.verdict === "passed"
-            ? "That's everything. Pre-flight checks passed: the booking is ready. See the confirmation and next steps on the right."
+            ? "That's everything. Pre-flight checks passed: the booking is ready for the carrier."
             : after.verdict === "warnings"
-              ? `That's everything I need. Checks passed with ${after.counts.amber} warning${after.counts.amber > 1 ? "s" : ""}; see the details on the right.`
-              : `I have all the details, but ${after.counts.red || after.counts.incomplete} issue${(after.counts.red || after.counts.incomplete) > 1 ? "s need" : " needs"} fixing before the shipment can go. Each one is explained on the right with a suggested fix, or just tell me the correction here.`
+              ? `That's everything I need. The checks passed with ${after.counts.amber} warning${after.counts.amber > 1 ? "s" : ""} to review.`
+              : `I have all the details, but ${after.counts.red || after.counts.incomplete} issue${(after.counts.red || after.counts.incomplete) > 1 ? "s need" : " needs"} fixing before the shipment can go. Each has a suggested fix on the right, or tell me the correction here.`
         );
     }
-    if (offline && edits.length === 0) {
-      lines.unshift("The language assistant is unavailable right now, so I couldn't read that. You can answer the question below in a few words, or fill in the booking directly using the form on the right.");
-    }
-    const nextAskKeys = nextAsk(out.booking)?.keys ?? [];
     setSt({
       ws,
-      msgs: [...before.msgs, { id, role: "user", text: message }, { id: `${id}-r`, role: "assistant", text: lines.join("\n\n"), meta, offline }],
-      asked: nextAskKeys,
+      msgs: [...before.msgs, { id, role: "user", text: message }, { id: `${id}-r`, role: "assistant", text: lines.join("\n\n"), changes, offline }],
+      asked: nextAsk(out.booking)?.keys ?? [],
+      assistDown: offline,
     });
     setBusy(false);
   };
@@ -157,20 +176,14 @@ export function BookApp() {
     setSt((s) => (s ? { ...s, ws: commit(s.ws, next, label, "edit", today), asked: nextAsk(next)?.keys ?? [] } : s));
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">New booking</h1>
-          <p className="text-sm text-ink-3">Describe the shipment in plain language. Checks re-run after every message. Today: {formatDate(today)} (IST)</p>
+          <h1 className="text-3xl font-semibold tracking-tight">Book by chat</h1>
+          <p className="mt-1 text-sm text-ink-3">Today: {formatDate(today)} (IST) · UK → Germany, France or the Netherlands</p>
         </div>
         <div className="flex items-center gap-2">
-          {pending ? (
-            <span className="inline-flex items-center rounded-full bg-brand-soft px-2 py-0.5 text-xs font-medium text-brand ring-1 ring-inset ring-brand/20">
-              Collecting details · {pending} question{pending > 1 ? "s" : ""} left
-            </span>
-          ) : (
-            <VerdictChip verdict={analysis.verdict} />
-          )}
+          {started && done === 4 && <VerdictChip verdict={analysis.verdict} />}
           <Button
             size="sm"
             onClick={() => {
@@ -178,68 +191,120 @@ export function BookApp() {
               setSt(fresh());
             }}
           >
-            <RotateCcw className="h-3.5 w-3.5" /> Start over
+            <RotateCcw className="h-3.5 w-3.5" aria-hidden /> Start over
           </Button>
         </div>
       </div>
 
-      <div className="flex gap-1 rounded-lg bg-grey-soft p-1 text-sm lg:hidden">
+      <ol className="grid grid-cols-4 gap-2" aria-label={`Booking progress: ${done} of 4 stages complete`}>
+        {progress.map((p, i) => {
+          const complete = started && p.open === 0;
+          const active = started && p.stage === current;
+          return (
+            <li
+              key={p.stage}
+              className={cx(
+                "flex items-center gap-2 rounded-xl px-3 py-2.5 text-sm",
+                complete ? "bg-green-soft text-green" : active ? "bg-brand-soft text-brand ring-2 ring-brand/30" : "bg-white text-ink-3 ring-1 ring-line"
+              )}
+              aria-current={active ? "step" : undefined}
+            >
+              <span className={cx("grid h-6 w-6 shrink-0 place-items-center rounded-full text-xs font-semibold", complete ? "bg-green text-white" : active ? "bg-brand text-white" : "bg-grey-soft")}>
+                {complete ? <Check className="h-3.5 w-3.5" aria-label="complete" /> : i + 1}
+              </span>
+              <span className="font-medium">{p.stage}</span>
+              {started && !complete && <span className="ml-auto hidden text-xs sm:inline">{p.open} to go</span>}
+            </li>
+          );
+        })}
+      </ol>
+
+      <div className="flex gap-1 rounded-lg bg-grey-soft p-1 text-sm lg:hidden" role="tablist" aria-label="View">
         {(["chat", "booking"] as const).map((t) => (
-          <button key={t} onClick={() => setTab(t)} className={cx("flex-1 rounded-md py-1.5 font-medium", tab === t ? "bg-white shadow-sm" : "text-ink-3")}>
-            {t === "chat" ? "Chat" : `Booking & checks`}
+          <button key={t} role="tab" aria-selected={tab === t} onClick={() => setTab(t)} className={cx("flex-1 rounded-md py-1.5 font-medium", tab === t ? "bg-white shadow-sm" : "text-ink-3")}>
+            {t === "chat" ? "Chat" : "Booking & checks"}
           </button>
         ))}
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-[400px_minmax(0,1fr)]">
+      <div className="grid gap-5 lg:grid-cols-[420px_minmax(0,1fr)]">
         <div className={cx("lg:block", tab === "chat" ? "block" : "hidden")}>
-          <div className="flex h-[calc(100vh-210px)] min-h-[520px] flex-col overflow-hidden rounded-xl border border-line bg-white lg:sticky lg:top-20">
-            <div ref={scroller} className="flex-1 space-y-3 overflow-y-auto p-4">
+          <div className="flex h-[calc(100vh-260px)] min-h-[520px] flex-col overflow-hidden rounded-2xl bg-white ring-1 ring-line lg:sticky lg:top-20">
+            <div ref={scroller} className="flex-1 space-y-4 overflow-y-auto p-4" role="log" aria-live="polite" aria-label="Conversation">
               {st.msgs.map((m) => (
                 <div key={m.id} className={cx("flex gap-2", m.role === "user" && "flex-row-reverse")}>
-                  <div className={cx("grid h-7 w-7 shrink-0 place-items-center rounded-full", m.role === "user" ? "bg-ink text-white" : "bg-brand-soft text-brand")}>
+                  <div className={cx("grid h-7 w-7 shrink-0 place-items-center rounded-full", m.role === "user" ? "bg-ink text-white" : "bg-brand-soft text-brand")} aria-hidden>
                     {m.role === "user" ? <User className="h-4 w-4" /> : m.offline ? <WifiOff className="h-4 w-4" /> : <Bot className="h-4 w-4" />}
                   </div>
-                  <div className={cx("max-w-[85%] whitespace-pre-wrap rounded-2xl px-3 py-2 text-sm", m.role === "user" ? "bg-ink text-white" : "bg-canvas text-ink")}>
-                    {m.text}
-                    {m.meta && <div className="mt-1.5 border-t border-line pt-1.5 text-xs text-brand">{m.meta}</div>}
+                  <div className={cx("max-w-[85%] space-y-2", m.role === "user" && "items-end")}>
+                    <div className={cx("whitespace-pre-wrap rounded-2xl px-3.5 py-2.5 text-sm", m.role === "user" ? "bg-ink text-white" : "bg-canvas text-ink")}>
+                      <span className="sr-only">{m.role === "user" ? "You: " : "Assistant: "}</span>
+                      {m.text}
+                    </div>
+                    {m.changes && m.changes.length > 0 && (
+                      <ul className="space-y-0.5 rounded-xl border border-brand/20 bg-brand-soft px-3 py-2 text-xs text-brand" aria-label="What changed">
+                        {m.changes.map((c, i) => (
+                          <li key={i}>• {c}</li>
+                        ))}
+                      </ul>
+                    )}
                   </div>
                 </div>
               ))}
               {busy && (
                 <div className="flex items-center gap-2 text-sm text-ink-3">
-                  <Loader2 className="h-4 w-4 animate-spin" /> Reading your message…
+                  <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> Reading your message…
                 </div>
               )}
-              {!started && (
-                <div className="space-y-2 pt-2">
-                  <div className="text-xs font-medium text-ink-3">Try an example:</div>
-                  {EXAMPLES.map((e) => (
-                    <button key={e} onClick={() => send(e)} className="block w-full rounded-lg border border-line px-3 py-2 text-left text-xs text-ink-2 hover:border-brand hover:bg-brand-soft/50">
+              {!busy && (
+                <div className="flex flex-wrap gap-2 pt-1" aria-label="Suggested messages">
+                  {(started ? EXAMPLES.slice(3) : EXAMPLES.slice(0, 1)).map((e) => (
+                    <button
+                      key={e}
+                      onClick={() => send(e)}
+                      className="rounded-full border border-line bg-white px-3 py-1.5 text-left text-xs text-ink-2 hover:border-brand hover:bg-brand-soft/50"
+                    >
                       {e}
                     </button>
                   ))}
                 </div>
               )}
             </div>
+            {st.assistDown && (
+              <div className="flex items-start gap-2 border-t border-amber-line bg-amber-soft px-4 py-2.5 text-xs text-ink-2" role="status">
+                <WifiOff className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber" aria-hidden />
+                {ASSIST_DOWN}
+              </div>
+            )}
             <form
-              className="flex gap-2 border-t border-line p-3"
+              className="border-t border-line p-3"
               onSubmit={(e) => {
                 e.preventDefault();
                 send(input);
               }}
             >
-              <input
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                placeholder={busy ? "Working…" : "Type a message, e.g. “add a pallet”"}
-                disabled={busy}
-                maxLength={2000}
-                className="min-w-0 flex-1 rounded-lg border border-grey-line px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand/30"
-              />
-              <Button type="submit" variant="primary" disabled={busy || !input.trim()}>
-                <Send className="h-4 w-4" />
-              </Button>
+              <div className="flex gap-2">
+                <label htmlFor="chat-input" className="sr-only">
+                  Message
+                </label>
+                <input
+                  id="chat-input"
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  placeholder={busy ? "Working…" : "Describe the shipment, or a change"}
+                  disabled={busy}
+                  maxLength={2000}
+                  className="min-w-0 flex-1 rounded-xl border border-grey-line px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand/30"
+                />
+                <Button type="submit" variant="primary" disabled={busy || !input.trim()} title="Send message">
+                  <Send className="h-4 w-4" aria-hidden />
+                  <span className="sr-only">Send message</span>
+                </Button>
+              </div>
+              <p className="mt-2 flex items-center gap-1.5 text-[11px] text-ink-3">
+                <ShieldCheck className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                Every message is checked against the fixed 10-rule rulebook. AI only reads your words; code makes every decision.
+              </p>
             </form>
           </div>
         </div>
@@ -257,9 +322,6 @@ export function BookApp() {
               )
             }
           />
-          {b.items.length === 0 && (
-            <p className="mt-3 text-xs text-ink-3">Products appear here as soon as you mention them in the chat.</p>
-          )}
         </div>
       </div>
     </div>

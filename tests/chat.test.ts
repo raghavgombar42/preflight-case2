@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { analyze } from "@/core/analyze";
-import { applyChatEdits, nextAsk, parseLocally, resolveRelativeDate } from "@/core/chat";
+import { applyChatEdits, nextAsk, offlineItemNote, parseLocally, resolveRelativeDate, stageProgress } from "@/core/chat";
 import { emptyChatBooking } from "@/core/edit";
 import { commit, newWorkspace } from "@/core/workspace";
 import { TODAY } from "./helpers";
@@ -124,5 +124,39 @@ describe("offline parser", () => {
     expect(resolveRelativeDate("tomorrow", TODAY)).toBe("2026-10-27");
     expect(resolveRelativeDate("on 5th Nov", TODAY)).toBe("2026-11-05");
     expect(resolveRelativeDate("in 2 weeks", TODAY)).toBe("2026-11-09");
+  });
+});
+
+describe("AI-unavailable fallback", () => {
+  it("never creates a product from a natural first message", () => {
+    const msg = "Sending 1080 ceramic mugs at £5 each, 12 per carton, from Manchester to Frankfurt";
+    const e = parseLocally(msg, fresh(), [], TODAY);
+    expect(e.some((x) => x.op === "add_item")).toBe(false);
+    expect(offlineItemNote(msg, e, fresh(), [])).toMatch(/haven't added any products/);
+  });
+  it("route, load, date and priority still parse offline", () => {
+    const e = parseLocally("2 pallets, 450 kg total, Leeds to Paris, business address, ready tomorrow, fastest", fresh(), [], TODAY);
+    const b = applyChatEdits(fresh(), e).booking;
+    expect([b.pallets.value, b.grossWeight.value, b.originCity.value, b.destCity.value, b.destinationType.value, b.readyDate.value, b.sellerPriority.value]).toEqual([
+      2, 450, "Leeds", "Paris", "Business address", "2026-10-27", "Fastest",
+    ]);
+  });
+  it("no product note for messages that aren't about goods", () => {
+    expect(offlineItemNote("add a pallet", [{ op: "adjust_number", field: "pallets", delta: 1 }], filled(), [])).toBeNull();
+  });
+  it("stage progress follows the missing questions", () => {
+    const p = stageProgress(fresh());
+    expect(p.map((x) => x.stage)).toEqual(["Route", "Goods", "Load", "Delivery"]);
+    expect(stageProgress(filled()).every((x) => x.open === 0)).toBe(true);
+  });
+});
+
+describe("fallback note stays quiet for non-goods changes", () => {
+  it("'add a pallet' while goods are being asked doesn't repeat the products note", () => {
+    const e = [{ op: "adjust_number" as const, field: "pallets", delta: 1 }];
+    expect(offlineItemNote("add a pallet", e, fresh(), ["items"])).toBeNull();
+  });
+  it("an unparsed reply to the goods question gets the note", () => {
+    expect(offlineItemNote("some lovely mugs", [], fresh(), ["items"])).toMatch(/Goods section/);
   });
 });

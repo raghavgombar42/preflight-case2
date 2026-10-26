@@ -385,3 +385,40 @@ export function compactBookingForModel(b: Booking) {
     })),
   };
 }
+
+// ---------- when the language model is unavailable ----------
+
+export const ASSIST_DOWN =
+  "Language assistance is temporarily unavailable. You can continue using the guided booking fields; your checks still work.";
+
+const ITEM_OPS = new Set<ChatEdit["op"]>(["add_item", "update_item", "remove_item", "mark_unknown", "confirm_no_battery"]);
+
+// The offline parser never invents products. If the message seems to describe
+// goods but nothing item-related was parsed, say so and point to the form.
+export function offlineItemNote(message: string, edits: ChatEdit[], b: Booking, asked: string[]): string | null {
+  if (edits.some((e) => ITEM_OPS.has(e.op))) return null;
+  const textMentionsGoods = /£|\beach\b|per (carton|box|case)|\bunits?\b|\bpcs\b|\bpieces\b|\bhs\b|made in|\bqty\b|\bquantity\b/i.test(message);
+  // An unparsed reply to the goods question also counts.
+  const answeringGoods = edits.length === 0 && (asked.includes("items") || asked.some((k) => k.startsWith("item:")));
+  const mentionsGoods = textMentionsGoods || answeringGoods;
+  if (!mentionsGoods) return null;
+  return b.items.length === 0
+    ? "I can't safely read product details without the language assistant, so I haven't added any products. Please add each product in the Goods section of the guided booking form."
+    : "I couldn't safely read those product details, so nothing about the products was changed. Please enter them in the Goods section of the guided booking form.";
+}
+
+// Booking stages shown as progress in chat.
+export const STAGES = ["Route", "Goods", "Load", "Delivery"] as const;
+export type Stage = (typeof STAGES)[number];
+
+export function stageOf(q: Question): Stage {
+  if (q.group === "route") return "Route";
+  if (q.group === "items" || q.group.startsWith("item:")) return "Goods";
+  if (q.group === "load") return "Load";
+  return "Delivery";
+}
+
+export function stageProgress(b: Booking): Array<{ stage: Stage; open: number }> {
+  const qs = missingQuestions(b);
+  return STAGES.map((stage) => ({ stage, open: qs.filter((q) => stageOf(q) === stage).length }));
+}
