@@ -249,7 +249,7 @@ function Hero({ ws, analysis, onUndo, onReset, onApply }: { ws: Workspace; analy
         <span className="rounded-lg bg-white/80 px-2.5 py-1 font-medium text-grey">{c.incomplete} missing</span>
       </div>
       <div className="mt-4 flex flex-wrap items-center gap-3 rounded-xl bg-white/80 px-4 py-3">
-        <Sparkles className="h-4 w-4 shrink-0 text-brand" aria-hidden />
+        <Sparkles className="h-4 w-4 shrink-0 text-accent" aria-hidden />
         <p className="min-w-0 flex-1 text-sm text-ink">
           <span className="font-semibold">Next step: </span>
           {next.text}
@@ -426,7 +426,7 @@ function IssueRow({
           {primary?.note && <p className="mt-1.5 text-xs text-ink-3">{primary.note}</p>}
           <div className="no-print mt-2 flex flex-wrap items-center gap-x-4 gap-y-1">
             {others.map((a) => (
-              <button key={a.id} className="text-sm font-medium text-brand hover:underline" onClick={() => onApply(a.patches, label(a))}>
+              <button key={a.id} className="text-sm font-medium text-accent-strong hover:underline" onClick={() => onApply(a.patches, label(a))}>
                 {a.label}
                 {a.resolves && <span className="ml-1 text-xs font-normal text-ink-3">(clears {uniqRules(a.resolves).join(", ") || "nothing alone"})</span>}
               </button>
@@ -545,7 +545,7 @@ function CarrierCard({ analysis, onApply }: { analysis: Analysis; onApply: Apply
         {d.chosen && d.recommended && d.recommended !== d.chosen && (
           <p className="text-sm text-ink-2">
             For “{d.priority}” we would recommend {d.recommended.option.carrier} {d.recommended.option.shortName}.{" "}
-            <button className="no-print font-medium text-brand hover:underline" onClick={() => onApply([{ kind: "chooseCarrier", carrier: null }], "Carrier choice cleared")}>
+            <button className="no-print font-medium text-accent-strong hover:underline" onClick={() => onApply([{ kind: "chooseCarrier", carrier: null }], "Carrier choice cleared")}>
               Use recommendation
             </button>
           </p>
@@ -658,7 +658,7 @@ function ConfirmationCard({ analysis, allAcked, ambers }: { analysis: Analysis; 
           <ol className="space-y-1.5 border-l-2 border-line pl-4">
             {analysis.timeline.map((s, i) => (
               <li key={i} className="relative text-sm">
-                <span className="absolute -left-[21px] top-1.5 h-2 w-2 rounded-full bg-brand" aria-hidden />
+                <span className="absolute -left-[21px] top-1.5 h-2 w-2 rounded-full bg-accent" aria-hidden />
                 <span className="font-medium text-ink">{s.label}</span>
                 {s.date && <span className="ml-2 text-xs tnum text-ink-3">{formatDate(s.date)}</span>}
               </li>
@@ -780,7 +780,7 @@ function BookingDataCard({ ws, onApply }: { ws: Workspace; onApply: ApplyFn }) {
   const isEditing = (r: FieldRef) =>
     edit && edit.field === r.field && edit.scope === r.scope && (r.scope === "booking" || (edit.scope === "item" && edit.itemId === r.itemId));
   const editBtn = (r: FieldRef, name: string) => (
-    <button className="no-print rounded p-0.5 text-ink-3 hover:text-brand" onClick={() => setEdit(isEditing(r) ? null : r)} aria-label={`Edit ${name}`}>
+    <button className="no-print rounded p-0.5 text-ink-3 hover:text-accent-strong" onClick={() => setEdit(isEditing(r) ? null : r)} aria-label={`Edit ${name}`}>
       <Pencil className="h-3.5 w-3.5" aria-hidden />
     </button>
   );

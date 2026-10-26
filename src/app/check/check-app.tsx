@@ -152,7 +152,7 @@ export function CheckApp() {
     const a = analyses.get(ws.current.uid)!;
     return (
       <div className="space-y-4">
-        <button className="no-print inline-flex items-center gap-1 text-sm font-medium text-brand" onClick={() => open(null)}>
+        <button className="no-print inline-flex items-center gap-1 text-sm font-medium text-accent-strong hover:underline" onClick={() => open(null)}>
           <ArrowLeft className="h-4 w-4" /> Review queue
         </button>
         <BookingView
@@ -210,10 +210,10 @@ function UploadPanel({ onFile, onSample, busy, error }: { onFile: (f: File) => v
         }}
         className={cx(
           "flex flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed px-6 py-14 text-center transition-colors",
-          drag ? "border-brand bg-brand-soft" : "border-grey-line bg-white"
+          drag ? "border-accent bg-accent-soft" : "border-grey-line bg-white"
         )}
       >
-        <FileSpreadsheet className="h-10 w-10 text-brand" aria-hidden />
+        <FileSpreadsheet className="h-10 w-10 text-accent" aria-hidden />
         <div className="text-lg font-medium">Drop the .xlsx here, or choose a file</div>
         <div className="text-sm text-ink-3">Read in your browser. Nothing is stored on a server.</div>
         <input
@@ -242,10 +242,10 @@ function UploadPanel({ onFile, onSample, busy, error }: { onFile: (f: File) => v
         {error && <div className="rounded-lg border border-red-line bg-red-soft px-4 py-3 text-sm text-red">{error}</div>}
       </div>
       <div className="flex flex-wrap items-center gap-5 text-sm">
-        <a className="inline-flex items-center gap-1 font-medium text-brand" href="/Case2_Shipment_Booking_Test_Data_Format.xlsx" download>
+        <a className="inline-flex items-center gap-1 font-medium text-accent-strong hover:underline" href="/Case2_Shipment_Booking_Test_Data_Format.xlsx" download>
           <Download className="h-4 w-4" aria-hidden /> Blank template
         </a>
-        <a className="inline-flex items-center gap-1 font-medium text-brand" href="/sample-bookings.xlsx" download>
+        <a className="inline-flex items-center gap-1 font-medium text-accent-strong hover:underline" href="/sample-bookings.xlsx" download>
           <Download className="h-4 w-4" aria-hidden /> Sample workbook (15 bookings, planted mistakes)
         </a>
       </div>
@@ -343,7 +343,7 @@ function Queue({
           <p>
             {action.sentence}{" "}
             {action.start && (
-              <button className="font-medium text-brand hover:underline" onClick={() => onOpen(action.start!.uid)}>
+              <button className="font-medium text-accent-strong hover:underline" onClick={() => onOpen(action.start!.uid)}>
                 {action.start.text} →
               </button>
             )}

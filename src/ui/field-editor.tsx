@@ -95,7 +95,7 @@ export function FieldEditor({
     onSave(patch, `${label}: ${fv && fv.value !== null ? displayRaw(fv.value) : "(blank)"} → ${raw ?? "(blank)"}`);
   };
 
-  const cls = "min-w-0 flex-1 rounded-md border border-grey-line bg-white px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand/30";
+  const cls = "min-w-0 flex-1 rounded-md border border-grey-line bg-white px-2 py-1.5 text-sm focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/25";
   const input = opts ? (
     <select
       id={id}

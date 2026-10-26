@@ -4,25 +4,34 @@
   --font-sans: var(--font-inter), ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
 
-  --color-ink: #0f172a;
-  --color-ink-2: #334155;
-  --color-ink-3: #64748b;
-  --color-line: #e2e8f0;
+  --font-display: var(--font-grotesk), var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+
+  /* Wheels Up: navy and orange from the logo, on a warm light base. */
+  --color-ink: #0f1b2d;
+  --color-ink-2: #3b4759;
+  --color-ink-3: #5e6878;
+  --color-line: #e8e2d6;
   --color-panel: #ffffff;
-  --color-canvas: #f6f7f9;
+  --color-canvas: #f7f4ee;
 
-  --color-brand: #1d4ed8;
-  --color-brand-soft: #eff4ff;
+  --color-brand: #1b2f52;
+  --color-brand-strong: #0f1b2d;
+  --color-brand-soft: #eef1f6;
 
-  --color-red: #b42318;
-  --color-red-soft: #fef3f2;
-  --color-red-line: #fecdca;
-  --color-amber: #b54708;
-  --color-amber-soft: #fffaeb;
-  --color-amber-line: #fedf89;
-  --color-grey: #475467;
-  --color-grey-soft: #f2f4f7;
-  --color-grey-line: #d0d5dd;
+  --color-accent: #f2662b;
+  --color-accent-strong: #c2410c;
+  --color-accent-soft: #fff1e8;
+  --color-accent-line: #fbd3bc;
+
+  --color-red: #b42335;
+  --color-red-soft: #fef2f3;
+  --color-red-line: #fbcfd5;
+  --color-amber: #8f5b00;
+  --color-amber-soft: #fff8e1;
+  --color-amber-line: #f3d98b;
+  --color-grey: #4b5565;
+  --color-grey-soft: #f3f1ec;
+  --color-grey-line: #d9d3c7;
   --color-green: #067647;
   --color-green-soft: #ecfdf3;
   --color-green-line: #abefc6;
@@ -36,6 +45,14 @@ body {
 
 body {
   font-feature-settings: "cv11", "ss01";
+  background-image: radial-gradient(1200px 420px at 50% -120px, rgba(242, 102, 43, 0.07), transparent 70%);
+  background-repeat: no-repeat;
+}
+
+h1,
+h2 {
+  font-family: var(--font-display);
+  letter-spacing: -0.01em;
 }
 
 .tnum {
@@ -57,7 +74,7 @@ body {
 }
 
 :focus-visible {
-  outline: 2px solid var(--color-brand);
+  outline: 2px solid var(--color-accent);
   outline-offset: 2px;
   border-radius: 6px;
 }

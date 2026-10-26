@@ -1,10 +1,11 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
+import { Inter, Space_Grotesk } from "next/font/google";
 import Link from "next/link";
 import { NavLinks } from "@/ui/nav";
 import "./globals.css";
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter", display: "swap" });
+const grotesk = Space_Grotesk({ subsets: ["latin"], weight: ["500", "600", "700"], variable: "--font-grotesk", display: "swap" });
 
 export const metadata: Metadata = {
   title: "Wheels Up · Pre-flight checks for UK → EU freight",
@@ -14,9 +15,10 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={inter.variable}>
+    <html lang="en" className={`${inter.variable} ${grotesk.variable}`}>
       <body className="min-h-screen font-sans antialiased">
-        <header className="sticky top-0 z-30 border-b border-line bg-white/90 backdrop-blur">
+        <header className="sticky top-0 z-30 border-b border-line bg-white/85 backdrop-blur">
+          <div className="h-[3px] bg-gradient-to-r from-brand via-brand to-accent" aria-hidden />
           <div className="mx-auto flex max-w-7xl items-center gap-6 px-4 py-3">
             <Link href="/" className="flex items-center gap-3 text-ink" aria-label="Wheels Up home">
               {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -27,7 +29,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           </div>
         </header>
         <main className="mx-auto max-w-7xl px-4 py-6">{children}</main>
-        <footer className="mx-auto max-w-7xl px-4 pb-10 pt-4 text-xs text-ink-3">
+        <footer className="mx-auto max-w-7xl border-t border-line px-4 pb-10 pt-5 text-xs text-ink-3">
           Checks are deterministic: every rule, total and carrier ranking is computed by code from the official rate card and
           rulebook. AI is used only to understand chat messages.
         </footer>

@@ -207,14 +207,14 @@ export function BookApp() {
               key={p.stage}
               className={cx(
                 "flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm",
-                complete ? "bg-green-soft text-green" : active ? "bg-white text-ink ring-2 ring-brand" : "bg-white/60 text-ink-3 ring-1 ring-line"
+                complete ? "bg-green-soft text-green" : active ? "bg-white text-ink ring-2 ring-accent" : "bg-white/60 text-ink-3 ring-1 ring-line"
               )}
               aria-current={active ? "step" : undefined}
             >
               <span
                 className={cx(
                   "grid h-6 w-6 shrink-0 place-items-center rounded-full text-xs font-semibold",
-                  complete ? "bg-green text-white" : active ? "bg-brand text-white" : "border border-grey-line text-ink-3"
+                  complete ? "bg-green text-white" : active ? "bg-accent text-white" : "border border-grey-line text-ink-3"
                 )}
                 aria-hidden
               >
@@ -222,7 +222,7 @@ export function BookApp() {
               </span>
               <span className="min-w-0">
                 <span className="block font-medium leading-tight">{p.stage}</span>
-                <span className={cx("block text-[11px] leading-tight", complete ? "text-green" : active ? "text-brand" : "text-ink-3")}>
+                <span className={cx("block text-[11px] leading-tight", complete ? "text-green" : active ? "text-accent-strong" : "text-ink-3")}>
                   {complete ? "Done" : active && p.open ? `${p.open} detail${p.open > 1 ? "s" : ""} to go` : state}
                 </span>
               </span>
@@ -245,7 +245,7 @@ export function BookApp() {
             <div ref={scroller} className="flex-1 space-y-4 overflow-y-auto p-4" role="log" aria-live="polite" aria-label="Conversation">
               {st.msgs.map((m) => (
                 <div key={m.id} className={cx("flex gap-2", m.role === "user" && "flex-row-reverse")}>
-                  <div className={cx("grid h-7 w-7 shrink-0 place-items-center rounded-full", m.role === "user" ? "bg-ink text-white" : "bg-brand-soft text-brand")} aria-hidden>
+                  <div className={cx("grid h-7 w-7 shrink-0 place-items-center rounded-full", m.role === "user" ? "bg-ink text-white" : "bg-accent-soft text-accent-strong")} aria-hidden>
                     {m.role === "user" ? <User className="h-4 w-4" /> : m.offline ? <WifiOff className="h-4 w-4" /> : <Bot className="h-4 w-4" />}
                   </div>
                   <div className={cx("max-w-[85%] space-y-2", m.role === "user" && "items-end")}>
@@ -274,7 +274,7 @@ export function BookApp() {
                     <button
                       key={e}
                       onClick={() => send(e)}
-                      className="rounded-full border border-line bg-white px-3 py-1.5 text-left text-xs text-ink-2 hover:border-brand hover:bg-brand-soft/50"
+                      className="rounded-full border border-line bg-white px-3 py-1.5 text-left text-xs text-ink-2 hover:border-accent hover:bg-accent-soft/60"
                     >
                       {e}
                     </button>
@@ -306,7 +306,7 @@ export function BookApp() {
                   placeholder={busy ? "Working…" : "Describe the shipment, or a change"}
                   disabled={busy}
                   maxLength={2000}
-                  className="min-w-0 flex-1 rounded-xl border border-grey-line px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand/30"
+                  className="min-w-0 flex-1 rounded-xl border border-grey-line px-3 py-2 text-sm focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/25"
                 />
                 <Button type="submit" variant="primary" disabled={busy || !input.trim()} title="Send message">
                   <Send className="h-4 w-4" aria-hidden />

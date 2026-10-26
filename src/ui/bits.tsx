@@ -100,7 +100,7 @@ export function SourceBadge({ source }: { source: FieldSource }) {
 
 export function Card({ children, className, id }: { children: React.ReactNode; className?: string; id?: string }) {
   return (
-    <section id={id} className={cx("print-break rounded-2xl bg-panel ring-1 ring-line/80 shadow-[0_1px_3px_rgba(16,24,40,0.05)]", className)}>
+    <section id={id} className={cx("print-break rounded-2xl bg-panel ring-1 ring-line shadow-[0_1px_2px_rgba(15,27,45,0.04),0_8px_24px_-12px_rgba(15,27,45,0.10)]", className)}>
       {children}
     </section>
   );
@@ -138,7 +138,7 @@ export function Button({
   title?: string;
 }) {
   const v = {
-    primary: "bg-brand text-white hover:bg-blue-800 shadow-sm",
+    primary: "bg-brand text-white hover:bg-brand-strong shadow-sm shadow-brand/20",
     secondary: "bg-white text-ink ring-1 ring-inset ring-grey-line hover:bg-grey-soft",
     ghost: "text-ink-2 hover:bg-grey-soft",
   }[variant];

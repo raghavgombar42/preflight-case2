@@ -32,8 +32,8 @@ function Disclosure({ title, sub, children, open }: { title: string; sub: string
           <h2 className="text-base font-semibold">{title}</h2>
           <p className="text-xs text-ink-3">{sub}</p>
         </div>
-        <span className="text-sm font-medium text-brand group-open:hidden">Show</span>
-        <span className="hidden text-sm font-medium text-brand group-open:inline">Hide</span>
+        <span className="text-sm font-medium text-accent-strong group-open:hidden">Show</span>
+        <span className="hidden text-sm font-medium text-accent-strong group-open:inline">Hide</span>
       </summary>
       <div className="border-t border-line">{children}</div>
     </details>
@@ -54,7 +54,7 @@ export default function Page() {
       <ol className="grid gap-3 sm:grid-cols-5" aria-label="Five-step flow">
         {STEPS.map((s, i) => (
           <li key={s.t} className="relative rounded-2xl bg-white p-4 ring-1 ring-line">
-            <span className="grid h-7 w-7 place-items-center rounded-full bg-brand text-xs font-semibold text-white" aria-hidden>
+            <span className="grid h-7 w-7 place-items-center rounded-full bg-accent text-xs font-semibold text-white" aria-hidden>
               {i + 1}
             </span>
             <div className="mt-3 font-semibold">{s.t}</div>

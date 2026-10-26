@@ -19,8 +19,11 @@ export function NavLinks() {
           <Link
             key={l.href}
             href={l.href}
-            className={`rounded-md px-2 py-1.5 font-medium transition-colors sm:px-2.5 ${
-              active ? "bg-brand-soft text-brand" : "text-ink-2 hover:bg-grey-soft hover:text-ink"
+            aria-current={active ? "page" : undefined}
+            className={`relative rounded-md px-2 py-1.5 font-medium transition-colors sm:px-2.5 ${
+              active
+                ? "text-ink after:absolute after:inset-x-2 after:-bottom-[13px] after:h-[3px] after:rounded-full after:bg-accent sm:after:inset-x-2.5"
+                : "text-ink-2 hover:bg-grey-soft hover:text-ink"
             }`}
           >
             <span className="sm:hidden">{l.short}</span>
